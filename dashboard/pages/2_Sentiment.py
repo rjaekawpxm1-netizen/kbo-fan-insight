@@ -68,3 +68,20 @@ else:
     st.divider()
     st.markdown("**시사점:** 감성 모델은 한계가 있었지만, 키워드 빈도는 모델 없이 신뢰 가능한 "
                 "'팬 관심사' 지표다. 자주 언급되는 선수·상황을 앱 콘텐츠·푸시 주제 선정에 활용 가능. (docs/05 참조)")
+
+st.divider()
+st.header("AI 팬 반응 요약 (Claude)")
+st.caption("범용 감성 모델이 야구 슬랭에 실패해, 한국어 맥락을 더 잘 읽는 LLM으로 정성 요약. "
+           "학습 모델이 아니라 LLM 요약이며, 주어진 댓글에 근거하도록 그라운딩했다. "
+           "⚠ 하이라이트는 두 팀이 함께 등장 → **매치업(경기) 단위 반응**이며 상대팀 선수가 섞일 수 있음.")
+fr = io.load_fan_report()
+if fr is None:
+    st.info("`python -m src.analysis.llm_fan_report` 실행 시 표시됩니다. (.env에 ANTHROPIC_API_KEY 필요)")
+else:
+    teams = [k for k in fr.keys() if not k.startswith("_")]
+    if teams:
+        t = st.selectbox("팀 선택", sorted(teams), key="fanreport")
+        st.markdown(fr[t])
+        meta = fr.get("_meta", {})
+        if meta:
+            st.caption(f"모델: {meta.get('model','?')} · 팀당 댓글 표본 {meta.get('sample_per_team','?')}개")

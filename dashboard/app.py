@@ -5,39 +5,63 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import streamlit as st  # noqa: E402
 from src.utils import io  # noqa: E402
 
-st.set_page_config(page_title="KBO Fan Insight", layout="wide")
-st.title("KBO AI Fan Insight — Executive Dashboard")
-st.markdown(
-    "KBO 공개 데이터(관중·유튜브 댓글)를 수집·분석해 **관중수 예측**과 **팬 반응**을 살피고, "
-    "결과를 앱 개선 방향으로 연결하는 프로젝트입니다. 모든 분석은 baseline 비교·검증을 거쳤습니다."
-)
+st.set_page_config(page_title="KBO Fan Insight", page_icon="⚾", layout="wide")
+
+st.title("⚾ KBO AI Fan Insight Platform")
+st.markdown("##### KBO 공개 데이터로 관중·팬 반응을 분석하고, 앱 개선 방향까지 연결한 데이터 분석 + 서비스 기획 프로젝트")
+st.caption("수집 → 분석 → 검증 → 대시보드 → 앱 개선 제안 · 모든 분석은 baseline 비교와 검증을 거쳤습니다")
 
 att = io.load_attendance_features()
-sent = io.load_sentiment()
+com = io.load_comments()
 
-st.subheader("핵심 지표")
-if att is None:
-    st.info("관중 피처셋이 없습니다. `python -m src.preprocess.build_dataset` 먼저 실행하세요.")
-else:
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("총 경기수", f"{len(att):,}")
-    c2.metric("평균 관중", f"{att['attendance'].mean():,.0f}명")
-    top = att.loc[att["attendance"].idxmax()]
-    c3.metric("최다 관중 경기", f"{int(top['attendance']):,}명", f"{top['home']} vs {top['away']}")
-    c4.metric("구장 수", f"{att['stadium'].nunique()}")
+st.subheader("핵심 결과")
+cols = st.columns(4)
+with cols[0]:
+    with st.container(border=True):
+        st.metric("분석 경기수", f"{len(att):,}" if att is not None else "—")
+with cols[1]:
+    with st.container(border=True):
+        st.metric("평균 관중", f"{att['attendance'].mean():,.0f}명" if att is not None else "—")
+with cols[2]:
+    with st.container(border=True):
+        mae_txt = "—"
+        bundle = io.load_model()
+        if att is not None and bundle is not None:
+            try:
+                from sklearn.metrics import mean_absolute_error
+                from src.analysis.attendance_forecast import CAT_COLS, NUM_COLS, time_split, TEST_FRAC
+                df = att.sort_values("date").reset_index(drop=True)
+                for c in CAT_COLS:
+                    df[c] = df[c].astype("category")
+                _, test = time_split(df, TEST_FRAC)
+                pred = bundle["model"].predict(test[CAT_COLS + NUM_COLS])
+                mae_txt = f"{mean_absolute_error(test['attendance'], pred):,.0f}명"
+            except Exception:
+                pass
+        st.metric("관중 예측 MAE", mae_txt, "구장별평균 대비 개선")
+with cols[3]:
+    with st.container(border=True):
+        st.metric("수집 댓글", f"{len(com):,}건" if com is not None else "—")
 
-if sent is not None:
-    pos = (sent["sentiment"] == "positive").mean() * 100
-    neg = (sent["sentiment"] == "negative").mean() * 100
-    c1, c2 = st.columns(2)
-    c1.metric("댓글 긍정 비율(모델)", f"{pos:.1f}%")
-    c2.metric("댓글 부정 비율(모델)", f"{neg:.1f}%")
-    st.caption("⚠ 감성 모델은 검증 결과 신뢰도가 낮습니다(Sentiment 페이지 참조). 수치는 참고용.")
+st.write("")
+left, right = st.columns(2)
+with left:
+    with st.container(border=True):
+        st.markdown(
+            "### 이 프로젝트가 답하는 질문\n"
+            "1. **관중은 언제·어디서 몰리고, 예측할 수 있는가?** → Attendance\n"
+            "2. **팬들은 무엇에 반응하고 무엇을 이야기하는가?** → Sentiment\n"
+            "3. **어떤 콘텐츠가 반응을 끄는가?** → Content\n\n"
+            "그리고 그 결과를 **앱 개선(개인화 홈·추천 경기·콘텐츠 정렬)** 으로 연결합니다."
+        )
+with right:
+    with st.container(border=True):
+        st.markdown(
+            "### 방법론 · 신뢰성\n"
+            "- 관중 예측: **시간순 분할 + 누수 방지**, 전체·구장별 평균 **baseline과 비교**\n"
+            "- 감성: 범용 모델을 **수기 200건으로 검증(정확도 39.5%)** → 한계 확인 후 **LLM 요약으로 전환**\n"
+            "- LLM: 댓글에만 근거하도록 **그라운딩**, 통계는 코드가 계산\n"
+            "- 데이터는 공개 출처(KBO 관중 · YouTube)만 사용"
+        )
 
-st.divider()
-st.markdown(
-    "#### 페이지 안내\n"
-    "- **Attendance** — 관중은 언제·어디서 몰리는가 + 예측 모델 성능\n"
-    "- **Sentiment** — 팬 반응(모델 한계 명시) + 키워드 빈도\n"
-    "- **Content** — 어떤 영상 콘텐츠가 반응을 끄는가"
-)
+st.caption("좌측 사이드바에서 상세 페이지로 이동하세요. 데이터가 없는 페이지는 실행 안내를 표시합니다.")
