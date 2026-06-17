@@ -1,0 +1,16 @@
+pandas
+numpy
+requests
+beautifulsoup4
+lxml
+selenium
+google-api-python-client
+python-dotenv
+scikit-learn
+xgboost
+joblib
+transformers
+torch
+streamlit
+plotly
+openpyxl

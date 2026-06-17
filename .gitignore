@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.ipynb_checkpoints/
+data/**/*.csv
+data/*.db
+models/*
+!models/.gitkeep
+reports/*.xlsx
+.DS_Store
