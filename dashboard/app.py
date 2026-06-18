@@ -52,7 +52,8 @@ with st.sidebar:
     st.divider()
     page = st.radio(
         "메뉴",
-        ["📊 종합 대시보드", "🏟️ 관중 분석·예측", "💬 팬 감성·반응", "🎬 콘텐츠 이용"],
+        ["📊 종합 대시보드", "🏟️ 관중 분석·예측", "💬 팬 감성·반응", "🎬 콘텐츠 이용",
+         "🧭 분석 → 제언"],
         label_visibility="collapsed",
     )
 
@@ -281,6 +282,70 @@ def render_content():
         st.markdown("💡 **시사점:** 반응이 큰 콘텐츠 유형을 앱 홈 추천 정렬 상단에 배치 → 체류 시간 향상. (docs/05 · F-04)")
 
 
+# ---------- 5. 분석 → 제언 ----------
+def render_conclusion():
+    st.title("🧭 분석 → 제언")
+    st.markdown("**분석을 했더니 → 이렇게 고쳐야 → 나아가야 할 방향.** 앞 페이지 결과를 앱 개선으로 잇는 종합 제언입니다.")
+
+    st.subheader("1. 분석을 했더니")
+    c = st.columns(2)
+    with c[0]:
+        with st.container(border=True):
+            st.markdown("🏟️ **관중은 주말·인기구장에 집중**")
+            if att is not None:
+                wk = att[att.is_weekend == 1]["attendance"].mean()
+                wd = att[att.is_weekend == 0]["attendance"].mean()
+                sm = att.groupby("stadium")["attendance"].mean()
+                st.markdown(f"주말이 평일보다 약 **{(wk-wd)/wd*100:.0f}% 많고**, 구장 격차도 큼"
+                            f"({sm.idxmax()}↔{sm.idxmin()}). 모델로 구장별평균 대비 +16% 예측.")
+            else:
+                st.markdown("주말·인기구장 집중. 모델로 구장별평균 대비 +16% 예측.")
+    with c[1]:
+        with st.container(border=True):
+            st.markdown("💬 **팬은 '기록'보다 '스토리'에 반응**")
+            st.markdown("끝내기·역전·육성 데뷔 같은 극적 장면에 반응이 집중(LLM 요약·키워드 빈도).")
+    c2 = st.columns(2)
+    with c2[0]:
+        with st.container(border=True):
+            st.markdown("🔬 **감성은 '검증'이 핵심이었다**")
+            ag = (io.load_llm_sentiment_meta() or {}).get("agreement")
+            st.markdown(f"범용 모델 39.5%(실패) → Claude 어노테이터로 전환, 인간 대비 **{ag*100:.1f}% 일치**."
+                        if ag else "범용 모델 39.5%(실패) → Claude로 전환·검증.")
+    with c2[1]:
+        with st.container(border=True):
+            st.markdown("📱 **앱엔 개인화가 없다 (AI 챗봇은 이미 존재)**")
+            st.markdown("전 사용자가 동일 홈, 응원팀 개인화 부재. AI 챗봇은 이미 있음(docs/01).")
+
+    st.subheader("2. 그래서 이렇게 고쳐야 (발견 → 개선)")
+    rec = pd.DataFrame([
+        ["개인화 부재", "F-01 응원팀 기반 개인화 홈", "상"],
+        ["팬 기록 욕구", "F-03 개인 관람 기록(승요력 등)", "상"],
+        ["관중 편차·예측 가능", "F-02 추천 경기 카드", "상"],
+        ["스토리에 반응", "F-04 콘텐츠 추천 정렬 · F-07 태깅", "중"],
+        ["AI 챗봇 기존재", "F-08 기존 챗봇 개인화 고도화", "중"],
+    ], columns=["분석 발견", "개선안(기능)", "우선순위"])
+    st.table(rec)
+
+    st.subheader("3. 나아가야 할 방향")
+    cc = st.columns(3)
+    with cc[0]:
+        with st.container(border=True):
+            st.markdown("**단기**")
+            st.markdown("응원팀 개인화 홈 + 추천 경기 — 근거가 가장 명확하고 진입 빈도 최고")
+    with cc[1]:
+        with st.container(border=True):
+            st.markdown("**중기**")
+            st.markdown("스토리 중심 콘텐츠 큐레이션 + 기존 AI 챗봇 개인화 고도화")
+    with cc[2]:
+        with st.container(border=True):
+            st.markdown("**데이터 과제**")
+            st.markdown("순위·승률 피처(시점 누수 주의) · 감성 도메인 파인튜닝 · 실 행동로그 확보")
+
+    with st.container(border=True):
+        st.markdown("⚠ 제언은 협의 전 제안이며, 개인화 근거 일부는 합성 행동로그 기반입니다. "
+                    "실서비스 적용에는 실데이터·유관 부서 협의가 필요합니다. (상세: docs/04 · docs/05)")
+
+
 # ---------- 라우터 ----------
 if page.startswith("📊"):
     render_overview()
@@ -288,5 +353,7 @@ elif page.startswith("🏟️"):
     render_attendance()
 elif page.startswith("💬"):
     render_sentiment()
-else:
+elif page.startswith("🎬"):
     render_content()
+else:
+    render_conclusion()
