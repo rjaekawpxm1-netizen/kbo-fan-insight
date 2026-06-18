@@ -1,0 +1,11 @@
+-r requirements.txt
+requests
+beautifulsoup4
+lxml
+selenium
+google-api-python-client
+python-dotenv
+transformers
+torch
+anthropic
+openpyxl

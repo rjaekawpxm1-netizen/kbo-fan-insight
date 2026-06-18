@@ -10,3 +10,19 @@ models/*
 reports/*.xlsx
 .DS_Store
 page.html
+__pycache__/
+*.pyc
+.venv/
+.env
+.ipynb_checkpoints/
+data/**/*.csv
+data/*.db
+models/*
+!models/.gitkeep
+reports/*.xlsx
+.DS_Store
+
+# 대시보드 배포용: 분석 결과물 포함 (원시 수집 데이터는 계속 제외)
+!data/processed/*.csv
+!data/processed/*.json
+!models/*.pkl

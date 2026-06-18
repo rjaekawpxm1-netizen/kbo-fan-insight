@@ -1,0 +1,18 @@
+name: Keep Streamlit Awake
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # 6시간마다 (잠드는 기준 12시간보다 짧게)
+  workflow_dispatch:         # 수동 실행 버튼
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install selenium
+      - run: python scripts/keep_awake.py

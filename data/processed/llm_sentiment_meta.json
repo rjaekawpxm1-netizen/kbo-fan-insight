@@ -1,0 +1,6 @@
+{
+  "model": "claude-sonnet-4-6",
+  "agreement": 0.755,
+  "n_validated": 200,
+  "n_labeled": 2000
+}

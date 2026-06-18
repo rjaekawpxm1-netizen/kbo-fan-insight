@@ -46,6 +46,19 @@ def load_fan_report():
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def load_llm_sentiment():
+    p = config.PROCESSED_DIR / "llm_sentiment.csv"
+    return pd.read_csv(p) if p.exists() else None
+
+
+def load_llm_sentiment_meta():
+    import json
+    p = config.PROCESSED_DIR / "llm_sentiment_meta.json"
+    if not p.exists():
+        return None
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
 def load_model():
     p = config.MODELS_DIR / "attendance_xgb.pkl"
     if not p.exists():
