@@ -29,8 +29,12 @@ SENT_COLORS = {
 }
 
 def _md(s):
-    """들여쓰기를 제거해 마크다운이 코드블록으로 오인하지 않게 HTML/CSS를 주입."""
-    st.markdown("\n".join(line.strip() for line in s.splitlines()), unsafe_allow_html=True)
+    """HTML/CSS 주입. st.html은 마크다운 처리를 거치지 않아 <style>이 안전하게 적용된다."""
+    if hasattr(st, "html"):
+        st.html(s)
+    else:  # 구버전 폴백: 빈 줄 제거(빈 줄이 <style> 블록을 끊음)
+        lines = [line.strip() for line in s.splitlines() if line.strip()]
+        st.markdown("\n".join(lines), unsafe_allow_html=True)
 
 
 _md(
