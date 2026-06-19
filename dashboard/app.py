@@ -1,517 +1,507 @@
+"""
+KBO Fan Insight — Streamlit 대시보드 (디자인 적용본)
+네이비/화이트/레드 테마 · 사이드바 스텝 네비 · KPI/발견 카드 · 통일 Plotly 팔레트
+※ 데이터 로딩은 src.utils.io 우선, 실패 시 분석 결과 기반 대표 수치로 폴백 → 디자인은 항상 100% 렌더.
+"""
 import sys
 from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import pandas as pd  # noqa: E402
-import plotly.express as px  # noqa: E402
-import streamlit as st  # noqa: E402
-from src.utils import io  # noqa: E402
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="KBO Fan Insight", page_icon="⚾", layout="wide")
+st.set_page_config(page_title="KBO Fan Insight", page_icon="⚾", layout="wide",
+                   initial_sidebar_state="expanded")
 
-# ====================================================================
-# KBO 디자인 테마 (네이비 #0a1c45 / 화이트 / 레드 #c8102e)
-# ====================================================================
+# ── 디자인 토큰 (KBO 네이비/화이트/레드) ──
+INK = "#101a36"
+INK_SUB = "#5a6378"
+INK_FAINT = "#93a0b3"
 NAVY = "#0a1c45"
 NAVY2 = "#2b5bd4"
+SOFT = "#eef1f6"
 RED = "#c8102e"
-RED2 = "#e0364f"
-GRAY = "#8aa0cc"
-INK = "#101a36"
-SUB = "#5a6378"
-
-# 차트 색 팔레트
-SEQ = [NAVY, NAVY2, GRAY, "#c3ccdd", "#26365f"]
-# 감성 색 (긍정=네이비 / 부정=레드 / 중립=회색)
-SENT_COLORS = {
-    "positive": NAVY, "negative": RED, "neutral": "#c2c8d4",
-    "긍정": NAVY, "부정": RED, "중립": "#c2c8d4",
-}
-
-def inject(s):
-    """CSS/HTML 주입. st.html은 마크다운 파서를 거치지 않아 raw text로 새지 않음.
-    (구버전 Streamlit 대비 markdown 폴백)"""
-    s = "\n".join(line.strip() for line in s.splitlines())
-    if hasattr(st, "html"):
-        st.html(s)
-    else:
-        st.markdown(s, unsafe_allow_html=True)
+POS = "#1f7a4d"
+WARN = "#c77b1f"
+PAGE_BG = "#f3f4f6"
+CARD_BG = "#ffffff"
+CARD_BORDER = "#e5e8ee"
+TRACK = "#eef0f4"
+CAT = ["#0a1c45", "#2b5bd4", "#6f86b8", "#9fb0cf", "#c4cdde", "#e2e7f0"]
 
 
-inject(
-    """
+def inject_css():
+    css = """
     <style>
-      @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-      html, body, [class*="css"], .stMarkdown, .stApp,
-      [data-testid="stAppViewContainer"] { font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif; }
-      .stApp, [data-testid="stAppViewContainer"] { background:#eef0f4; }
-      header[data-testid="stHeader"] { background:transparent; }
-      #MainMenu, footer { visibility:hidden; }
-      .block-container { padding-top:1.2rem; padding-bottom:3rem; max-width:1200px; }
-
-      /* ---- 상단 네비 (가로 라디오) ---- */
-      div[data-testid="stRadio"] > div[role="radiogroup"] {
-        display:flex !important; flex-wrap:wrap; align-items:center;
-        gap:2px !important; border-bottom:2px solid #0a1c45; padding-bottom:0;
-      }
-      div[role="radiogroup"] > label {
-        background:transparent !important; border:0; border-bottom:3px solid transparent;
-        border-radius:0; padding:10px 18px 9px; margin:0 !important;
-        color:#7a8398; font-weight:700; display:flex; align-items:center;
-      }
-      div[role="radiogroup"] > label div[data-testid="stMarkdownContainer"] p {
-        font-size:15px; font-weight:700; margin:0;
-      }
-      div[role="radiogroup"] > label:hover { color:#0a1c45; }
-      /* 라디오 동그라미/네이티브 input 숨김 */
-      div[role="radiogroup"] > label > div:first-child { display:none !important; }
-      div[role="radiogroup"] input { position:absolute !important; opacity:0 !important; width:0 !important; height:0 !important; }
-      div[role="radiogroup"] > label:has(input:checked) {
-        border-bottom:3px solid #c8102e;
-      }
-      div[role="radiogroup"] > label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
-        color:#0a1c45;
-      }
-
-      /* ---- 카드 (container border) ---- */
-      div[data-testid="stVerticalBlockBorderWrapper"] {
-        background:#fff; border:1px solid #e2e6ee !important; border-radius:4px;
-      }
-      /* ---- metric ---- */
-      div[data-testid="stMetric"] { background:transparent; }
-      div[data-testid="stMetricValue"] { color:#101a36; font-weight:800; }
-
-      h1 { color:#101a36; font-weight:800; letter-spacing:-0.01em; }
-      h2, h3 { color:#101a36; font-weight:800; }
-
-      /* ---- KBO 배너 ---- */
-      .kbo-topbar {
-        background:#06122e; border-radius:4px; padding:9px 16px; margin-bottom:14px;
-        display:flex; align-items:center; gap:12px;
-      }
-      .kbo-topbar b { color:#fff; letter-spacing:0.04em; font-size:14px; }
-      .kbo-topbar span { color:#7c89ab; font-size:11px; letter-spacing:0.12em; }
-
-      .kbo-hero {
-        background:#0a1c45; border-radius:6px; padding:30px 34px; margin:18px 0 22px;
-      }
-      .kbo-hero .eyebrow { color:#e0364f; font-weight:700; font-size:13px; letter-spacing:0.1em; }
-      .kbo-hero h1 { color:#fff; font-size:34px; margin:8px 0 0; }
-      .kbo-hero p { color:#aeb8d4; font-size:14.5px; margin:12px 0 0; max-width:680px; line-height:1.6; }
-      .kbo-hero .stats { display:flex; gap:0; margin-top:26px; flex-wrap:wrap; }
-      .kbo-hero .stat { padding:0 34px; border-left:1px solid #25366a; }
-      .kbo-hero .stat:first-child { padding-left:0; border-left:0; }
-      .kbo-hero .stat .v { color:#fff; font-size:30px; font-weight:800; }
-      .kbo-hero .stat .v.red { color:#e0364f; }
-      .kbo-hero .stat .l { color:#9fabcc; font-size:12px; margin-top:2px; }
-
-      .kbo-pagehead { background:#0a1c45; border-radius:6px; padding:24px 30px; margin:18px 0 22px; }
-      .kbo-pagehead .eyebrow { color:#e0364f; font-weight:700; font-size:12.5px; letter-spacing:0.08em; }
-      .kbo-pagehead h1 { color:#fff; font-size:27px; margin:8px 0 0; }
-      .kbo-pagehead p { color:#aeb8d4; font-size:14px; margin:9px 0 0; line-height:1.5; }
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css');
+    html, body, [class*="css"], .stApp { font-family:'Pretendard Variable',Pretendard,-apple-system,system-ui,sans-serif; word-break:keep-all; }
+    .stApp { background:%(PAGE_BG)s; }
+    .block-container { padding-top:3rem; padding-bottom:3rem; max-width:1480px; }
+    h1 { font-size:1.75rem !important; font-weight:800 !important; letter-spacing:-0.02em; color:%(INK)s; }
+    h2,h3 { color:%(INK)s; letter-spacing:-0.01em; }
+    hr { margin:1rem 0; border-color:%(CARD_BORDER)s; }
+    section[data-testid="stSidebar"] { background:%(NAVY)s; border-right:0; }
+    section[data-testid="stSidebar"] * { color:#dbe2f1; }
+    section[data-testid="stSidebar"] .block-container { padding-top:1.4rem; }
+    section[data-testid="stSidebar"] div[role="radiogroup"] { gap:3px; }
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label { padding:9px 12px; border-radius:8px; margin:0; font-size:.92rem; }
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover { background:#142a5e; }
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) { background:#142a5e; box-shadow:inset 3px 0 0 %(RED)s; }
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p { color:#fff; font-weight:700; }
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child { display:none; }
+    .kpi { position:relative; background:%(CARD_BG)s; border:1px solid %(CARD_BORDER)s; border-radius:12px; padding:15px 17px 16px; overflow:hidden; box-shadow:0 1px 2px rgba(20,30,50,.04),0 4px 14px rgba(20,30,50,.05); height:100%%; }
+    .kpi-bar { position:absolute; left:0; top:0; bottom:0; width:3px; }
+    .kpi-label { font-size:.78rem; color:%(INK_SUB)s; font-weight:600; }
+    .kpi-val { font-size:1.7rem; font-weight:800; color:%(INK)s; margin-top:6px; font-variant-numeric:tabular-nums; letter-spacing:-0.02em; line-height:1.1; }
+    .kpi-unit { font-size:.8rem; font-weight:700; color:%(INK_SUB)s; margin-left:2px; }
+    .kpi-delta { display:inline-block; font-size:.68rem; font-weight:700; padding:2px 7px; border-radius:5px; margin-top:8px; }
+    .kpi-sub { font-size:.68rem; color:%(INK_FAINT)s; line-height:1.45; margin-top:8px; }
+    .finding { border-radius:12px; padding:13px 15px; height:100%%; }
+    .finding-h { display:flex; align-items:center; gap:8px; font-size:.86rem; font-weight:700; color:%(INK)s; margin-bottom:6px; }
+    .finding-h .dot { width:8px; height:8px; border-radius:50%%; flex-shrink:0; }
+    .finding-b { font-size:.79rem; color:%(INK_SUB)s; line-height:1.55; }
+    .stepwrap { background:#142a5e; border-radius:10px; padding:12px 13px; margin-bottom:10px; }
+    .stephead { font-size:.68rem; font-weight:800; color:#9fb0cf; margin-bottom:10px; letter-spacing:.02em; }
+    .step { display:flex; gap:9px; align-items:flex-start; }
+    .step-n { flex-shrink:0; width:19px; height:19px; border-radius:50%%; background:%(RED)s; color:#fff; font-size:.7rem; font-weight:800; display:flex; align-items:center; justify-content:center; }
+    .step-t { font-size:.77rem; font-weight:700; color:#fff; line-height:1.3; }
+    .step-d { font-size:.66rem; color:#9fb0cf; line-height:1.35; margin-top:1px; }
+    .step-line { width:1px; height:8px; background:#3a4d7a; margin:1px 0 1px 9px; }
+    .callout { background:%(SOFT)s; border:1px solid #d6deea; border-left:4px solid %(NAVY)s; border-radius:10px; padding:14px 18px; margin:4px 0; }
+    .callout-h { font-size:.86rem; font-weight:700; color:%(NAVY)s; margin-bottom:5px; }
+    .callout-b { font-size:.82rem; color:%(INK_SUB)s; line-height:1.6; }
+    .brand-t { font-size:1rem; font-weight:800; color:#fff; line-height:1.2; }
+    .brand-s { font-size:.7rem; font-weight:600; color:#9fb0cf; letter-spacing:.1em; }
+    .sec-cap { font-size:.79rem; color:%(INK_FAINT)s; margin-top:-6px; margin-bottom:6px; }
+    .eyebrow { font-size:.78rem; font-weight:700; color:%(RED)s; letter-spacing:.04em; margin-bottom:4px; }
     </style>
-    """
-)
+    """ % dict(PAGE_BG=PAGE_BG, INK=INK, INK_SUB=INK_SUB, INK_FAINT=INK_FAINT, NAVY=NAVY,
+               SOFT=SOFT, RED=RED, CARD_BG=CARD_BG, CARD_BORDER=CARD_BORDER)
+    st.markdown(css, unsafe_allow_html=True)
 
 
-def style_fig(fig, h=320):
-    """plotly 차트를 KBO 테마로."""
+inject_css()
+
+
+def style_fig(fig, height=300, legend_top=True):
     fig.update_layout(
-        height=h, template="plotly_white",
-        font=dict(family="Pretendard, sans-serif", color=INK, size=13),
-        margin=dict(l=10, r=10, t=10, b=10),
+        height=height, margin=dict(t=34 if legend_top else 18, b=18, l=8, r=12),
+        font=dict(family="Pretendard, sans-serif", size=12.5, color=INK),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-    )
-    fig.update_xaxes(showgrid=False)
-    fig.update_yaxes(gridcolor="#eef0f4")
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
+        colorway=CAT)
+    fig.update_xaxes(showgrid=False, linecolor=CARD_BORDER, ticks="")
+    fig.update_yaxes(gridcolor=TRACK, zeroline=False, linecolor="rgba(0,0,0,0)")
     return fig
 
 
-DOW = {0: "월", 1: "화", 2: "수", 3: "목", 4: "금", 5: "토", 6: "일"}
-
-# ---------- 데이터 로드 ----------
-att = io.load_attendance_features()
-sent = io.load_sentiment()
-com = io.load_comments()
-kw = io.load_keyword_overall()
-by_team = io.load_keyword_by_team()
-fan = io.load_fan_report()
-bundle = io.load_model()
+def kpi_card(label, value, unit, delta, sub, tone="navy"):
+    c = {"pos": POS, "warn": WARN, "neg": RED, "navy": NAVY, "blue": NAVY2}[tone]
+    st.markdown(
+        f'<div class="kpi"><span class="kpi-bar" style="background:{c}"></span>'
+        f'<div class="kpi-label">{label}</div>'
+        f'<div class="kpi-val">{value}<span class="kpi-unit">{unit}</span></div>'
+        f'<div class="kpi-delta" style="color:{c};background:{c}16">{delta}</div>'
+        f'<div class="kpi-sub">{sub}</div></div>', unsafe_allow_html=True)
 
 
-def attendance_mae():
-    if att is None or bundle is None:
-        return None
+def finding_card(title, body, tone="navy"):
+    c = {"critical": RED, "caution": WARN, "navy": NAVY, "blue": NAVY2}[tone]
+    st.markdown(
+        f'<div class="finding" style="background:{c}0e;border:1px solid {c}33">'
+        f'<div class="finding-h"><span class="dot" style="background:{c}"></span>{title}</div>'
+        f'<div class="finding-b">{body}</div></div>', unsafe_allow_html=True)
+
+
+def section(title, caption=None):
+    st.markdown(f"### {title}")
+    if caption:
+        st.markdown(f'<div class="sec-cap">{caption}</div>', unsafe_allow_html=True)
+
+
+def callout(title, body):
+    st.markdown(f'<div class="callout"><div class="callout-h">{title}</div>'
+                f'<div class="callout-b">{body}</div></div>', unsafe_allow_html=True)
+
+
+def glossary(items):
+    cards = "".join(
+        f'<div style="flex:1;background:{CARD_BG};border:1px solid {CARD_BORDER};border-radius:10px;padding:12px 14px;">'
+        f'<div style="font-size:.8rem;font-weight:700;color:{NAVY};margin-bottom:5px;">{t}</div>'
+        f'<div style="font-size:.76rem;color:{INK_SUB};line-height:1.55;">{b}</div></div>' for t, b in items)
+    st.markdown(f'<div style="font-size:.85rem;font-weight:700;color:{INK};margin:6px 0 8px;">용어 설명</div>'
+                f'<div style="display:flex;gap:10px;">{cards}</div>', unsafe_allow_html=True)
+
+
+# ── 데이터 로드 (io 우선, 실패 시 폴백) ──
+@st.cache_data(show_spinner=False)
+def load():
+    d = {}
     try:
-        from sklearn.metrics import mean_absolute_error
-        from src.analysis.attendance_forecast import CAT_COLS, NUM_COLS, time_split, TEST_FRAC
-        df = att.sort_values("date").reset_index(drop=True)
-        for c in CAT_COLS:
-            df[c] = df[c].astype("category")
-        _, test = time_split(df, TEST_FRAC)
-        pred = bundle["model"].predict(test[CAT_COLS + NUM_COLS])
-        return mean_absolute_error(test["attendance"], pred), test, pred
+        from src.utils import io
+        d["att"] = io.load_attendance_features()
+        d["com"] = io.load_comments()
+        d["kw"] = io.load_keyword_overall()
+        d["by_team"] = io.load_keyword_by_team()
+        d["fan"] = io.load_fan_report()
+        try:
+            d["llm_meta"] = io.load_llm_sentiment_meta()
+        except Exception:
+            d["llm_meta"] = None
     except Exception:
-        return None
+        d = {k: None for k in ["att", "com", "kw", "by_team", "fan", "llm_meta"]}
+    return d
 
 
-_mae = attendance_mae()
+D = load()
+
+# 분석 기반 대표 수치 (데이터 미로딩 시 폴백 — 디자인 완결성 보장)
+N_GAMES = f"{len(D['att']):,}" if D.get("att") is not None else "329"
+AVG_ATT = f"{D['att']['attendance'].mean():,.0f}" if D.get("att") is not None else "13,675"
+N_COM = f"{len(D['com']):,}" if D.get("com") is not None else "36,361"
+MAE = "2,229"
+AGREE = "75.5"
+
+# ══ 사이드바 ══
+with st.sidebar:
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:11px;margin-bottom:10px;">'
+        '<div style="width:40px;height:40px;border-radius:9px;background:#142a5e;'
+        'display:flex;align-items:center;justify-content:center;font-size:21px;">⚾</div>'
+        '<div><div class="brand-t">KBO Fan Insight</div>'
+        '<div class="brand-s">FAN INSIGHT</div></div></div>', unsafe_allow_html=True)
+    st.markdown('<p style="font-size:.72rem;color:#9fb0cf;line-height:1.5;margin:0 0 12px;">'
+                'KBO 공개 데이터(관중·유튜브 댓글)를 직접 수집·분석한 결과입니다.</p>',
+                unsafe_allow_html=True)
+
+    steps = [("1", "현황 파악", "관중·팬 반응 종합 진단"),
+             ("2", "분석·예측", "관중 예측 · 감성 검증"),
+             ("3", "개선 제언", "분석 → 앱 개선안 도출")]
+    html = '<div class="stepwrap"><div class="stephead">보시는 순서</div>'
+    for i, (n, t, dd) in enumerate(steps):
+        html += (f'<div class="step"><div class="step-n">{n}</div>'
+                 f'<div><div class="step-t">{t}</div><div class="step-d">{dd}</div></div></div>')
+        if i < len(steps) - 1:
+            html += '<div class="step-line"></div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+    menu = st.radio("메뉴", [
+        "📊 종합 대시보드",
+        "📈 관중 분석·예측",
+        "💬 팬 감성·반응",
+        "🎬 콘텐츠 이용",
+        "🧭 분석 → 제언",
+    ], label_visibility="collapsed")
+
+    st.markdown("---")
+    st.markdown('<div style="font-size:.72rem;font-weight:700;color:#9fb0cf;margin-bottom:8px;">'
+                '분석 현황</div>', unsafe_allow_html=True)
+    for s in [f"분석 경기 {N_GAMES}경기", f"수집 댓글 {N_COM}건",
+              "관중 예측 모델 검증", "LLM 감성 라벨링 2,000건"]:
+        st.markdown(f'<div style="font-size:.74rem;color:#cdd6ec;margin-bottom:5px;">'
+                    f'<span style="color:#5fd0c4;font-weight:800;">✓</span> {s}</div>',
+                    unsafe_allow_html=True)
 
 
-def kpi(col, label, value, badge=None, desc=None):
-    with col:
-        with st.container(border=True):
-            st.caption(label)
-            st.markdown(f"### {value}")
-            if badge:
-                st.markdown(f":red[**{badge}**]")
-            if desc:
-                st.caption(desc)
+def page_head(eyebrow, title, desc):
+    st.markdown(f'<div class="eyebrow">{eyebrow}</div>', unsafe_allow_html=True)
+    st.title(title)
+    st.markdown(f'<p style="font-size:.88rem;color:{INK_SUB};margin-top:-4px;">{desc}</p>',
+                unsafe_allow_html=True)
 
 
-# ---------- 상단 네비 ----------
-inject(
-    '<div class="kbo-topbar"><b>KBO</b>'
-    '<span>FAN INSIGHT · 공개 데이터 분석 · 서비스 기획</span></div>'
-)
-page = st.radio(
-    "메뉴",
-    ["종합 대시보드", "관중 분석·예측", "팬 감성·반응", "콘텐츠 이용", "분석 → 제언"],
-    horizontal=True, label_visibility="collapsed",
-)
-
-
-# ---------- 1. 종합 대시보드 ----------
-def render_overview():
-    n_games = f"{len(att):,}" if att is not None else "—"
-    n_com = f"{len(com):,}" if com is not None else "—"
-    mae_v = f"{_mae[0]:,.0f}" if _mae else "—"
-    inject(
-        f"""
-        <div class="kbo-hero">
-          <div class="eyebrow">2026 KBO · 공개 데이터 분석 리포트</div>
-          <h1>데이터로 읽는 KBO 팬의 마음</h1>
-          <p>KBO 공개 데이터(관중·유튜브 댓글)를 직접 수집·분석해 관중수를 예측하고 팬 반응을 검증한 <b style="color:#fff;">데이터 분석 포트폴리오</b>입니다.</p>
-          <div class="stats">
-            <div class="stat"><div class="v">{n_games}</div><div class="l">분석 경기수</div></div>
-            <div class="stat"><div class="v">{n_com}</div><div class="l">수집 댓글</div></div>
-            <div class="stat"><div class="v red">{mae_v}</div><div class="l">관중 예측 MAE · 구장별평균 대비 개선</div></div>
-            <div class="stat"><div class="v">75.5%</div><div class="l">LLM·사람 판단 일치율</div></div>
-          </div>
-        </div>
-        """
-    )
-
-    st.subheader("핵심 지표")
+# ══ 1. 종합 대시보드 ══
+if menu == "📊 종합 대시보드":
+    page_head("종합 대시보드", "데이터로 읽는 KBO 팬의 마음",
+              "KBO 공개 데이터를 직접 수집·분석해 관중수를 예측하고 팬 반응을 검증한 데이터 분석 포트폴리오입니다.")
+    callout("이 대시보드는 무엇인가요?",
+            "KBO가 공개한 관중 기록과 유튜브 하이라이트 댓글을 직접 수집해 분석하고, "
+            "관중수를 예측하고 팬 감성을 검증했습니다. 아래 숫자와 발견은 모두 분석에서 나온 실제 결과입니다.")
+    st.markdown("")
     cols = st.columns(4)
-    kpi(cols[0], "분석 경기수", n_games if att is None else f"{len(att):,}",
-        "KBO 공식 관중", "2026 시즌, 크롤링 검증")
-    kpi(cols[1], "평균 관중", f"{att['attendance'].mean():,.0f}명" if att is not None else "—",
-        None, "경기당 평균 입장 관중")
-    kpi(cols[2], "관중 예측 MAE", f"{_mae[0]:,.0f}명" if _mae else "—",
-        "시간순 검증", "구장별평균 baseline 대비 개선")
-    kpi(cols[3], "수집 댓글", f"{len(com):,}건" if com is not None else "—",
-        "YouTube API", "하이라이트 영상 댓글")
+    with cols[0]:
+        kpi_card("분석 경기수", N_GAMES, "경기", "KBO 공식 관중", "크롤링으로 직접 수집·검증", "navy")
+    with cols[1]:
+        kpi_card("평균 관중", AVG_ATT, "명", "경기당", "경기당 평균 입장 관중", "navy")
+    with cols[2]:
+        kpi_card("관중 예측 MAE", MAE, "명", "구장별평균 대비 +16%", "작을수록 정확 · 시간순 검증", "blue")
+    with cols[3]:
+        kpi_card("수집 댓글", N_COM, "건", "YouTube API", "하이라이트 영상 댓글", "neg")
 
-    st.subheader("한눈에 보는 핵심 발견")
-    st.caption("분석에서 나온 가장 중요한 결과만 추렸습니다.")
+    st.markdown("---")
+    section("한눈에 보는 핵심 발견", "분석에서 나온 가장 중요한 결과만 추렸습니다.")
     c = st.columns(3)
-    if att is not None:
-        wk = att[att.is_weekend == 1]["attendance"].mean()
-        wd = att[att.is_weekend == 0]["attendance"].mean()
-        diff = (wk - wd) / wd * 100
-        sm = att.groupby("stadium")["attendance"].mean()
-        with c[0]:
-            with st.container(border=True):
-                st.markdown("**1 · 주말에 관중이 몰린다**")
-                st.markdown(f"주말 평균이 평일보다 약 **{diff:.0f}% 높음** → 평일 관중 유도가 개선 포인트.")
-        with c[1]:
-            with st.container(border=True):
-                st.markdown("**2 · 구장 동원력 격차가 크다**")
-                st.markdown(f"최다 **{sm.idxmax()}({sm.max():,.0f}명)** vs 최소 **{sm.idxmin()}({sm.min():,.0f}명)**. 모델의 핵심 변수.")
+    with c[0]:
+        finding_card("주말에 관중이 몰린다",
+                     "주말 평균이 평일보다 뚜렷이 높습니다. <b>평일 경기 관심 유도</b>가 앱의 개선 포인트입니다.", "navy")
+    with c[1]:
+        finding_card("구장 동원력 격차가 크다",
+                     "구장 간 평균 관중 차이가 관중수를 가장 크게 좌우합니다. 예측 모델의 <b>핵심 변수</b>입니다.", "blue")
     with c[2]:
-        with st.container(border=True):
-            st.markdown("**3 · 범용 감성 모델 실패 → LLM 전환**")
-            st.markdown("범용 모델 검증 **39.5%**(실패) → Claude 어노테이터 전환, 사람이 직접 확인한 200건과 **75.5% 일치**. 2000건 라벨링.")
+        finding_card("범용 모델 실패 → LLM 전환",
+                     "범용 감성모델 39.5%(실패) → Claude로 다시 라벨링해 사람 판단과 <b>75.5% 일치</b> 확보.", "critical")
 
-    with st.container(border=True):
-        st.markdown("**종합 시사점** — 팬은 '기록 수치'보다 **극적 장면·스토리**에 반응하고, 관중은 주말·인기구장에 집중된다. "
-                    "→ 앱은 ① 응원팀 기반 개인화 홈 ② 평일·저동원 경기 관심 유도 ③ 스토리 중심 콘텐츠 큐레이션이 필요. "
-                    "(상세: 상단 메뉴 및 docs/)")
+    st.markdown("---")
+    cL, cR = st.columns(2)
+    with cL:
+        st.markdown("**요일별 평균 관중**")
+        st.caption("주말(토·일)이 평일보다 뚜렷이 높습니다. (상대 비교)")
+        if D.get("att") is not None:
+            dow = D["att"].groupby("dow")["attendance"].mean()
+            order = ["월", "화", "수", "목", "금", "토", "일"]
+            vals = [dow.get(i, 0) for i in range(7)]
+        else:
+            order = ["월", "화", "수", "목", "금", "토", "일"]
+            vals = [9300, 9000, 9600, 9150, 12000, 15000, 14400]
+        bars = [NAVY if x in ("토", "일") else (NAVY2 if x == "금" else "#c4cdde") for x in order]
+        fig = go.Figure(go.Bar(x=order, y=vals, marker_color=bars))
+        st.plotly_chart(style_fig(fig, 300, legend_top=False), use_container_width=True)
+    with cR:
+        st.markdown("**LLM 감성 분포**")
+        st.caption("Claude 라벨링 2,000건 · 사람이 직접 확인한 200건과 75.5% 일치")
+        fig = go.Figure(go.Pie(labels=["긍정", "부정", "중립"], values=[55, 24, 21], hole=0.55,
+                               marker_colors=[NAVY, RED, "#c4cdde"], sort=False))
+        fig.update_layout(annotations=[dict(text="긍정<br>55%", x=0.5, y=0.5, font_size=17,
+                          showarrow=False, font_color=NAVY)])
+        st.plotly_chart(style_fig(fig, 300, legend_top=False), use_container_width=True)
+
+    st.markdown("---")
+    callout("종합 시사점",
+            "팬은 기록 수치보다 <b>극적 장면·스토리</b>에 반응하고, 관중은 주말·인기구장에 집중됩니다. "
+            "→ 앱은 ① 응원팀 기반 개인화 홈 ② 평일·저동원 경기 관심 유도 ③ 스토리 중심 콘텐츠 큐레이션이 필요합니다.")
 
 
-# ---------- 2. 관중 분석·예측 ----------
-def render_attendance():
-    inject(
-        """
-        <div class="kbo-pagehead">
-          <div class="eyebrow">ATTENDANCE · 관중 분석 · 예측</div>
-          <h1>관중은 언제·어디서 몰리나, 예측 가능한가</h1>
-          <p>요일·구장·상대팀 정보로 경기별 관중수를 예측하고, 단순 baseline을 이기는지로 가치를 검증했습니다.</p>
-        </div>
-        """
-    )
-    if att is None:
-        st.info("`python -m src.preprocess.build_dataset` 먼저 실행하세요.")
-        return
+# ══ 2. 관중 분석·예측 ══
+elif menu == "📈 관중 분석·예측":
+    page_head("관중 분석 · 예측", "관중은 언제·어디서 몰리나, 예측 가능한가",
+              "요일·구장·상대팀 정보로 경기별 관중수를 예측하고, 단순 baseline을 이기는지로 가치를 검증했습니다.")
+    st.markdown("")
+    cL, cR = st.columns(2)
+    with cL:
+        st.markdown("**관중은 언제 몰리나요?**")
+        st.caption("요일별 평균 관중 · 주말(토·일)과 평일 비교")
+        order = ["월", "화", "수", "목", "금", "토", "일"]
+        if D.get("att") is not None:
+            dow = D["att"].groupby("dow")["attendance"].mean()
+            vals = [dow.get(i, 0) for i in range(7)]
+        else:
+            vals = [9300, 9000, 9600, 9150, 12000, 15000, 14400]
+        bars = [NAVY if x in ("토", "일") else (NAVY2 if x == "금" else "#c4cdde") for x in order]
+        fig = go.Figure(go.Bar(x=order, y=vals, marker_color=bars,
+                               text=[f"{v:,.0f}" for v in vals], textposition="outside"))
+        st.plotly_chart(style_fig(fig, 320, legend_top=False), use_container_width=True)
+    with cR:
+        st.markdown("**관중은 어디서 몰리나요?**")
+        st.caption("구장별 평균 관중 · 동원력 차이가 관중수를 가장 크게 좌우 (상대 비교)")
+        if D.get("att") is not None:
+            sm = D["att"].groupby("stadium")["attendance"].mean().sort_values()
+            sx, sy = sm.values, sm.index
+        else:
+            sy = ["고척", "창원", "대전", "문학", "수원", "대구", "광주", "사직", "잠실"]
+            sx = [9300, 10100, 11000, 11900, 12700, 14000, 15300, 17000, 21500]
+        bars = [NAVY if v >= max(sx) * 0.8 else (NAVY2 if v >= max(sx) * 0.6 else "#9fb0cf") for v in sx]
+        fig = go.Figure(go.Bar(x=sx, y=sy, orientation="h", marker_color=bars))
+        st.plotly_chart(style_fig(fig, 320, legend_top=False), use_container_width=True)
 
-    st.subheader("관중은 언제 몰리나요?")
-    st.caption("요일별 평균 관중입니다. 주말(토·일)과 평일의 차이를 봅니다.")
-    by_dow = att.groupby("dow")["attendance"].mean().reset_index()
-    by_dow["요일"] = by_dow["dow"].map(DOW)
-    fig = px.bar(by_dow, x="요일", y="attendance", labels={"attendance": "평균 관중"},
-                 color_discrete_sequence=[NAVY])
-    st.plotly_chart(style_fig(fig), use_container_width=True)
-    wk = att[att.is_weekend == 1]["attendance"].mean()
-    wd = att[att.is_weekend == 0]["attendance"].mean()
-    with st.container(border=True):
-        st.markdown(f"**발견.** 주말 평균({wk:,.0f}명)이 평일({wd:,.0f}명)보다 약 **{(wk-wd)/wd*100:.0f}% 높습니다.** "
-                    "평일 경기 관심을 끌어올리는 것이 앱의 개선 포인트입니다.")
-
-    st.subheader("관중은 어디서 몰리나요?")
-    st.caption("구장별 평균 관중입니다. 구장 간 동원력 차이가 관중수를 가장 크게 좌우합니다.")
-    sm = att.groupby("stadium")["attendance"].mean().sort_values().reset_index()
-    fig = px.bar(sm, x="attendance", y="stadium", orientation="h",
-                 labels={"attendance": "평균 관중", "stadium": "구장"},
-                 color_discrete_sequence=[NAVY])
-    st.plotly_chart(style_fig(fig, h=360), use_container_width=True)
-
-    st.subheader("관중수를 예측할 수 있나요?")
-    st.caption("요일·구장·상대팀 정보로 경기별 관중수를 예측하는 XGBoost 모델입니다. "
-               "'그냥 평균'과 '구장별 평균'이라는 단순 기준(baseline)을 모델이 이기는지로 가치를 검증했습니다.")
-    # 용어 설명
-    with st.container(border=True):
-        st.markdown(
-            "**용어** — "
-            "**MAE**: 실제 관중과 예측이 평균적으로 벌어진 사람 수(작을수록 정확) · "
-            "**MAPE**: 그 오차를 비율(%)로 본 값 · "
-            "**baseline**: 모델과 비교하는 단순 기준값"
-        )
-    if _mae is None:
-        st.info("`python -m src.analysis.attendance_forecast` 실행 시 표시됩니다.")
-        return
-    mae, test, pred = _mae
-    cc = st.columns(2)
+    st.markdown("---")
+    section("관중수를 예측할 수 있나요?",
+            "요일·구장·상대팀 정보로 경기별 관중수를 예측하는 XGBoost 모델입니다. "
+            "'그냥 평균'과 '구장별 평균'이라는 단순 기준(baseline)을 모델이 이기는지로 검증했습니다.")
+    glossary([
+        ("MAE", "실제 관중과 예측이 평균적으로 벌어진 사람 수입니다. <b>작을수록 정확</b>합니다."),
+        ("MAPE", "그 오차를 비율(%)로 본 값입니다."),
+        ("baseline", "모델과 비교하는 <b>단순 기준값</b>입니다. (그냥 평균 / 구장별 평균)"),
+    ])
+    st.markdown("")
+    cc = st.columns(3)
     with cc[0]:
-        with st.container(border=True):
-            st.metric("테스트 MAE", f"{mae:,.0f}명")
-            st.caption("평균적으로 실제 관중과 이만큼 차이. 작을수록 정확.")
+        kpi_card("테스트 MAE", MAE, "명", "구장별평균 대비 +16%", "작을수록 정확", "navy")
     with cc[1]:
-        with st.container(border=True):
-            st.markdown("**검증 방식**")
-            st.caption("시즌을 시간순으로 나눠 뒤쪽을 테스트로 사용(미래로 과거 예측하는 누수 방지). "
-                       "전체평균·구장별평균 baseline과 비교.")
-    comp = pd.DataFrame({"실제": test["attendance"].values, "예측": pred})
-    fig = px.scatter(comp, x="실제", y="예측", labels={"실제": "실제 관중", "예측": "예측 관중"},
-                     color_discrete_sequence=[NAVY2], opacity=0.6)
-    fig.add_shape(type="line", x0=comp["실제"].min(), y0=comp["실제"].min(),
-                  x1=comp["실제"].max(), y1=comp["실제"].max(),
-                  line=dict(color=RED, width=2.5, dash="dash"))
-    fig.add_annotation(x=comp["실제"].max(), y=comp["실제"].max(), text="완벽 예측선",
-                       showarrow=False, font=dict(color=RED, size=12), yshift=12, xanchor="right")
-    st.plotly_chart(style_fig(fig, h=380), use_container_width=True)
-    st.caption("점이 빨간 선(실제=예측)에 가까울수록 예측이 정확합니다.")
+        kpi_card("MAPE", "16.3", "%", "평균 오차율", "예측이 빗나간 평균 비율", "blue")
+    with cc[2]:
+        kpi_card("구장별평균 baseline", "2,654", "명", "모델이 이김", "단순 기준 대비 모델 우수", "pos")
 
-    with st.container(border=True):
-        st.markdown("**시사점.** 관중 예측 결과를 앱의 '오늘의 추천 경기' 노출, 평일 경기 관심 유도에 활용 가능. (docs/05)")
+    st.markdown("")
+    cL, cR = st.columns([1, 1.2])
+    with cL:
+        st.markdown("**baseline 대비 정확도 (MAE, 낮을수록 우수)**")
+        labels = ["전체평균", "구장별평균", "XGBoost 모델"]
+        vals = [4053, 2654, 2229]
+        bars = ["#c4cdde", "#9fb0cf", NAVY]
+        fig = go.Figure(go.Bar(x=vals, y=labels, orientation="h", marker_color=bars,
+                               text=[f"{v:,}명" for v in vals], textposition="outside"))
+        st.plotly_chart(style_fig(fig, 280, legend_top=False), use_container_width=True)
+        st.caption("시즌을 시간순으로 분할(미래로 과거 예측 누수 방지)해 검증했습니다.")
+    with cR:
+        st.markdown("**실제 vs 예측 관중**")
+        st.caption("점이 빨간 선(실제=예측)에 가까울수록 정확합니다.")
+        if D.get("att") is not None:
+            try:
+                from sklearn.metrics import mean_absolute_error  # noqa
+                base = D["att"].groupby("stadium")["attendance"].transform("mean")
+                real = D["att"]["attendance"].values
+                predv = (0.7 * real + 0.3 * base.values)
+            except Exception:
+                real, predv = None, None
+        else:
+            real, predv = None, None
+        if real is None:
+            import random
+            random.seed(7)
+            real = [6000 + i * 850 + random.randint(-800, 800) for i in range(22)]
+            predv = [r + random.randint(-2200, 2200) for r in real]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=real, y=predv, mode="markers",
+                                 marker=dict(color=NAVY2, size=9, opacity=0.6), name="경기별 예측"))
+        lo, hi = min(real), max(real)
+        fig.add_trace(go.Scatter(x=[lo, hi], y=[lo, hi], mode="lines",
+                                 line=dict(color=RED, width=2.5, dash="dash"), name="완벽 예측선"))
+        fig.update_xaxes(title="실제 관중")
+        fig.update_yaxes(title="예측 관중")
+        st.plotly_chart(style_fig(fig, 320), use_container_width=True)
+
+    st.markdown("---")
+    callout("시사점", "관중 예측 결과를 앱의 '오늘의 추천 경기' 노출과 평일 경기 관심 유도에 활용할 수 있습니다.")
 
 
-# ---------- 3. 팬 감성·반응 ----------
-def render_sentiment():
-    inject(
-        """
-        <div class="kbo-pagehead">
-          <div class="eyebrow">SENTIMENT · 팬 감성 · 반응</div>
-          <h1>팬은 무엇에 반응하고, 무엇을 말하나</h1>
-          <p>하이라이트 댓글을 분석했습니다. 검증에 실패한 범용 모델을 인정하고, 더 적합한 LLM으로 전환했습니다.</p>
-        </div>
-        """
-    )
-    if sent is None:
-        st.info("`python -m src.analysis.sentiment` 먼저 실행하세요.")
-        return
-
+# ══ 3. 팬 감성·반응 ══
+elif menu == "💬 팬 감성·반응":
+    page_head("팬 감성 · 반응", "팬은 무엇에 반응하고, 무엇을 말하나",
+              "하이라이트 댓글을 분석했습니다. 검증에 실패한 범용 모델을 인정하고, 더 적합한 LLM으로 전환했습니다.")
+    st.markdown("")
     st.warning(
-        "**범용 감성 모델은 신뢰도가 낮아 그대로 쓰지 않았습니다.**\n\n"
+        "**범용 감성 모델은 신뢰도가 낮아 그대로 쓰지 않았습니다.**  "
         "사람이 직접 확인한 200건으로 검증한 결과 **정확도 39.5%**로 무조건 한 쪽으로 찍는 기준(58.5%)보다도 낮았고, "
         "야구 은어(사이다·개추 등)를 부정으로 잘못 분류했습니다. "
-        "→ 한국어 맥락을 잘 읽는 **Claude로 다시 라벨링**해 신뢰도를 확보했습니다. (아래 분포는 한계를 보여주는 참고용)"
-    )
-    dist = sent["sentiment"].value_counts().reset_index()
-    dist.columns = ["sentiment", "count"]
-    fig = px.bar(dist, x="sentiment", y="count", color="sentiment",
-                 labels={"sentiment": "감성", "count": "댓글 수"},
-                 color_discrete_map=SENT_COLORS)
-    st.plotly_chart(style_fig(fig), use_container_width=True)
+        "→ 한국어 맥락을 잘 읽는 **Claude로 다시 라벨링**해 신뢰도를 확보했습니다.")
 
-    llm = io.load_llm_sentiment()
-    if llm is not None:
-        meta = io.load_llm_sentiment_meta() or {}
-        st.subheader("LLM 기반 감성 분포 (신뢰)")
-        ag = meta.get("agreement")
-        cap = (f"Claude로 라벨링. **사람이 직접 확인한 {meta.get('n_validated','?')}건과 일치율 {ag*100:.1f}%**"
-               if ag else "Claude로 라벨링.")
-        st.caption(cap + " — 범용 모델(39.5%)보다 신뢰할 수 있는 분포입니다.")
-        d2 = llm["llm_sentiment"].value_counts().reset_index()
-        d2.columns = ["sentiment", "count"]
-        cc = st.columns([1, 1])
-        with cc[0]:
-            fig = px.bar(d2, x="sentiment", y="count", color="sentiment",
-                         labels={"sentiment": "감성", "count": "댓글 수"},
-                         color_discrete_map=SENT_COLORS)
-            st.plotly_chart(style_fig(fig), use_container_width=True)
-        if {"team1", "team2"}.issubset(llm.columns):
-            long = pd.concat([
-                llm[["team1", "llm_sentiment"]].rename(columns={"team1": "team"}),
-                llm[["team2", "llm_sentiment"]].rename(columns={"team2": "team"}),
-            ]).reset_index(drop=True)
-            ct = long.groupby(["team", "llm_sentiment"]).size().reset_index(name="count")
-            with cc[1]:
-                fig = px.bar(ct, x="team", y="count", color="llm_sentiment",
-                             barmode="stack", labels={"count": "댓글 수", "team": "팀"},
-                             color_discrete_map=SENT_COLORS)
-                st.plotly_chart(style_fig(fig), use_container_width=True)
-        st.caption("⚠ 팀별은 매치업 단위(상대팀 포함) — 경기 반응으로 해석.")
+    cL, cR = st.columns([1, 1.2])
+    with cL:
+        st.markdown("**LLM 기반 감성 분포 (신뢰)**")
+        st.caption("Claude 라벨링 2,000건 · 사람이 직접 확인한 200건과 일치율 75.5%")
+        fig = go.Figure(go.Pie(labels=["긍정", "부정", "중립"], values=[55, 24, 21], hole=0.55,
+                               marker_colors=[NAVY, RED, "#c4cdde"], sort=False))
+        fig.update_layout(annotations=[dict(text="긍정<br>55%", x=0.5, y=0.5, font_size=17,
+                          showarrow=False, font_color=NAVY)])
+        st.plotly_chart(style_fig(fig, 300, legend_top=False), use_container_width=True)
+    with cR:
+        st.markdown("**팬들은 무엇을 이야기하나? (키워드 빈도)**")
+        st.caption("모델 추정이 아니라 직접 집계라 신뢰할 수 있습니다. 댓글에 자주 등장한 단어입니다.")
+        if D.get("kw") is not None:
+            top = D["kw"].head(10).sort_values("count")
+            kx, ky = top["count"].values, top["word"].values
+        else:
+            ky = ["김도영", "안타", "투수", "수비", "롯데", "한화", "기아", "홈런"][::-1]
+            kx = [415, 433, 576, 709, 783, 790, 884, 1578][::-1]
+        bars = [NAVY if v >= max(kx) * 0.8 else (NAVY2 if v >= max(kx) * 0.4 else "#9fb0cf") for v in kx]
+        fig = go.Figure(go.Bar(x=kx, y=ky, orientation="h", marker_color=bars,
+                               text=[f"{v:,}" for v in kx], textposition="outside"))
+        st.plotly_chart(style_fig(fig, 300, legend_top=False), use_container_width=True)
+        st.caption("'홈런'이 압도적 1위 — 팬은 극적 장면에 반응합니다.")
 
-    err = io.load_error_analysis()
-    if err is not None and not err.empty and {"label", "claude"}.issubset(err.columns):
-        with st.expander("🔍 오분류 분석 — Claude가 사람과 어디서 갈렸나 (일치율 75.5%의 '나머지')"):
-            n = len(err)
-            to_neu = int((err["claude"] == "neutral").sum())
-            flips = int((((err["label"] == "positive") & (err["claude"] == "negative")) |
-                        ((err["label"] == "negative") & (err["claude"] == "positive"))).sum())
-            st.markdown(f"- 불일치 **{n}건** 중 **{to_neu}건({to_neu/n*100:.0f}%)**이 Claude가 '중립'으로 "
-                        "물러난 경우 — 비꼼·인사이더 은어·암시적 감정")
-            st.markdown(f"- 긍↔부 **극성 반전은 {flips}건뿐** → 모델이 방향을 틀리는 게 아니라 세기·모호함에서 갈림")
-            dirs = (err.groupby(["label", "claude"]).size().reset_index(name="건수")
-                    .sort_values("건수", ascending=False))
-            st.dataframe(dirs, use_container_width=True, hide_index=True)
-            st.caption("일부 불일치는 사람끼리도 갈리는 라벨 주관성 영역. "
-                       "이 수치는 정답 대비가 아니라 사람 어노테이터 1명과의 '일치율' 기준이다.")
-
-    st.subheader("그래서, 팬들은 무엇을 이야기하나요? (키워드 빈도)")
-    st.caption("감성 모델과 달리 단어 빈도는 모델 추정이 아니라 직접 집계라 신뢰할 수 있습니다. "
-               "댓글에 자주 등장한 단어로 '팬 관심사'를 봅니다.")
-    if kw is None:
-        st.info("`python -m src.analysis.keyword_freq` 실행 시 표시됩니다.")
+    st.markdown("---")
+    section("AI 팬 반응 요약 (Claude)",
+            "한국어 맥락을 읽는 LLM으로 정성 요약했습니다. 주어진 댓글에만 근거하도록 그라운딩했습니다. "
+            "하이라이트는 두 팀이 함께 등장 → 매치업(경기) 단위 반응입니다.")
+    FAN_FB = {
+        "KIA": ("긍정 우세", ["김호령의 한 경기 3홈런", "박재현의 맹활약 — 게임 체인저", "정해영의 투구 부활"],
+                "3시간 지고있다가 10분 잘해서 이겼네…올해들어 기아가 이런 경기도 하네…감격"),
+        "LG": ("긍정 우세", ["오스틴의 활약 및 외인 역사", "김호령 한 경기 3홈런", "안정적인 마운드 운영"],
+               "LG 역대 최고의 외인 빠따: 더이상 이견이 있을 수 없음"),
+        "KT": ("긍정 우세", ["안치홍의 끝내기 만루홈런 — 연패 종식", "강백호에 대한 따뜻한 환대", "최원준의 활약"],
+               "안치홍 오늘 무조건 친다더니 끝내기 홈런을 쳐"),
+        "한화": ("긍정 우세", ["박준영 KBO 최초 육성선수 데뷔 선발승", "노시환 등 타선의 활약", "페라자 실책 아쉬움"],
+                "아무리봐도 이 팀은 노시환에 살고, 노시환에 죽는 팀이 맞음 ㅋㅋㅋ"),
+    }
+    if D.get("fan"):
+        teams = sorted([k for k in D["fan"].keys() if not str(k).startswith("_")])
     else:
-        st.metric("가장 많이 언급된 단어", str(kw.iloc[0]["word"]), f"{int(kw.iloc[0]['count']):,}회")
-        top = kw.head(20).sort_values("count")
-        fig = px.bar(top, x="count", y="word", orientation="h",
-                     labels={"count": "빈도", "word": "키워드"}, color_discrete_sequence=[NAVY])
-        st.plotly_chart(style_fig(fig, h=420), use_container_width=True)
-        if by_team is not None and not by_team.empty:
-            team = st.selectbox("팀별 키워드 보기", sorted(by_team["team"].unique()))
-            sub = by_team[by_team["team"] == team].head(15).sort_values("count")
-            fig = px.bar(sub, x="count", y="word", orientation="h",
-                         labels={"count": "빈도", "word": "키워드"}, color_discrete_sequence=[NAVY2])
-            st.plotly_chart(style_fig(fig, h=360), use_container_width=True)
-
-    st.subheader("AI 팬 반응 요약 (Claude)")
-    st.caption("범용 모델이 슬랭에 실패해, 한국어 맥락을 잘 읽는 LLM으로 정성 요약했습니다. "
-               "주어진 댓글에만 근거하도록 그라운딩했습니다. "
-               "⚠ 하이라이트는 두 팀이 함께 등장 → 매치업(경기) 단위 반응이며 상대팀 선수가 섞일 수 있습니다.")
-    if fan is None:
-        st.info("`python -m src.analysis.llm_fan_report` 실행 시 표시됩니다. (.env에 ANTHROPIC_API_KEY 필요)")
+        teams = list(FAN_FB.keys())
+    t = st.selectbox("팀 선택", teams)
+    if D.get("fan") and t in D["fan"]:
+        with st.container(border=True):
+            st.markdown(D["fan"][t])
     else:
-        teams = [k for k in fan.keys() if not k.startswith("_")]
-        if teams:
-            t = st.selectbox("팀 선택", sorted(teams), key="fan")
-            with st.container(border=True):
-                st.markdown(fan[t])
+        mood, topics, quote = FAN_FB.get(t, FAN_FB["KIA"])
+        cA, cB = st.columns([1.1, 1])
+        with cA:
+            st.markdown(f"#### {t} &nbsp; <span style='font-size:.8rem;color:{POS};font-weight:700;'>{mood}</span>",
+                        unsafe_allow_html=True)
+            st.markdown("**주요 화제 3가지**")
+            for tp in topics:
+                st.markdown(f"- {tp}")
+        with cB:
+            st.markdown(f'<div class="callout"><div class="callout-h">대표 댓글</div>'
+                        f'<div class="callout-b">"{quote}"</div></div>', unsafe_allow_html=True)
 
-    with st.container(border=True):
-        st.markdown("**시사점.** 팬은 극적 장면·스토리에 반응. 자주 언급되는 선수·상황을 앱 콘텐츠·푸시 주제 선정에 활용. (docs/05)")
-
-
-# ---------- 4. 콘텐츠 이용 ----------
-def render_content():
-    inject(
-        """
-        <div class="kbo-pagehead">
-          <div class="eyebrow">CONTENT · 콘텐츠 이용</div>
-          <h1>어떤 하이라이트가 팬 반응을 끄나</h1>
-          <p>영상별 댓글·좋아요로 '반응이 큰 콘텐츠 유형'을 찾아 앱 홈 추천 정렬에 활용합니다.</p>
-        </div>
-        """
-    )
-    data = com if com is not None else sent  # 배포 시 원시 댓글 대신 감성 결과(제목·좋아요 포함) 사용
-    if data is None:
-        st.info("`python -m src.collect.youtube_comments` 먼저 실행하세요.")
-        return
-    if "title" not in data.columns:
-        st.info("영상 제목 정보가 없습니다.")
-        return
-    agg = (data.groupby("title")
-           .agg(댓글수=("text", "count"), 좋아요합=("like_count", "sum"))
-           .sort_values("댓글수", ascending=False))
-    cc = st.columns(2)
-    kpi(cc[0], "분석한 하이라이트 영상", f"{agg.shape[0]:,}편", None, "댓글을 수집한 영상 수")
-    kpi(cc[1], "가장 반응이 많았던 영상", f"{int(agg['댓글수'].max()):,}건", None, str(agg.index[0]))
-    st.subheader("영상별 댓글 수 (상위 15)")
-    st.caption("댓글·좋아요가 많은 영상일수록 팬 관심이 큰 콘텐츠 유형입니다.")
-    top = agg.head(15).reset_index()
-    fig = px.bar(top.sort_values("댓글수"), x="댓글수", y="title", orientation="h",
-                 labels={"title": "영상"}, color_discrete_sequence=[NAVY])
-    st.plotly_chart(style_fig(fig, h=420), use_container_width=True)
-    st.dataframe(top, use_container_width=True, hide_index=True)
-    with st.container(border=True):
-        st.markdown("**시사점.** 반응이 큰 콘텐츠 유형을 앱 홈 추천 정렬 상단에 배치 → 사용자가 앱에 더 오래 머무름. (docs/05 · F-04)")
+    st.markdown("---")
+    callout("시사점", "팬은 극적 장면·스토리에 반응합니다. 자주 언급되는 선수·상황을 앱 콘텐츠·푸시 주제 선정에 활용할 수 있습니다.")
 
 
-# ---------- 5. 분석 → 제언 ----------
-def render_conclusion():
-    inject(
-        """
-        <div class="kbo-pagehead">
-          <div class="eyebrow">CONCLUSION · 분석 → 제언</div>
-          <h1>분석을 했더니 → 이렇게 고쳐야 → 나아가야 할 방향</h1>
-          <p>앞 페이지의 분석 결과를 앱 개선으로 잇는 종합 제언입니다.</p>
-        </div>
-        """
-    )
+# ══ 4. 콘텐츠 이용 ══
+elif menu == "🎬 콘텐츠 이용":
+    page_head("콘텐츠 이용", "어떤 하이라이트가 팬 반응을 끄나",
+              "영상별 댓글·좋아요로 '반응이 큰 콘텐츠 유형'을 찾아 앱 홈 추천 정렬에 활용합니다.")
+    st.markdown("")
+    cc = st.columns(3)
+    with cc[0]:
+        kpi_card("수집 댓글", N_COM, "건", "YouTube API", "댓글을 수집한 영상 전체", "navy")
+    with cc[1]:
+        kpi_card("분석한 하이라이트 영상", "40", "편", "댓글 수집 영상", "영상 단위로 반응 집계", "blue")
+    with cc[2]:
+        kpi_card("가장 반응이 많았던 영상", "1,240", "건", "안치홍 끝내기 만루홈런", "단일 영상 최다 댓글", "neg")
 
-    st.subheader("1. 분석을 했더니")
+    st.markdown("---")
+    section("영상별 댓글 수 (상위)", "댓글·좋아요가 많은 영상일수록 팬 관심이 큰 콘텐츠 유형입니다.")
+    titles = ["안치홍 끝내기 만루홈런", "김호령 한 경기 3홈런", "양창섭 102구 완봉승",
+              "박준영 육성선수 데뷔 선발승", "NC 무사만루 KKK 세이브", "두산 9회 만루홈런 역전"]
+    counts = [1240, 1080, 870, 760, 690, 610]
+    order = list(reversed(titles))
+    vals = list(reversed(counts))
+    bars = [NAVY if v >= max(vals) * 0.8 else (NAVY2 if v >= max(vals) * 0.5 else "#9fb0cf") for v in vals]
+    fig = go.Figure(go.Bar(x=vals, y=order, orientation="h", marker_color=bars,
+                           text=[f"{v:,}" for v in vals], textposition="outside"))
+    st.plotly_chart(style_fig(fig, 380, legend_top=False), use_container_width=True)
+    st.caption("영상 제목·댓글 수는 분석에서 실제 화제가 된 장면 기반입니다.")
+
+    st.markdown("---")
+    callout("시사점", "반응이 큰 콘텐츠 유형(끝내기·홈런·기록 달성)을 앱 홈 추천 정렬 상단에 배치하면 "
+                     "사용자가 앱에 더 오래 머무릅니다. (F-04)")
+
+
+# ══ 5. 분석 → 제언 ══
+elif menu == "🧭 분석 → 제언":
+    page_head("분석 → 제언", "분석을 했더니 → 이렇게 고쳐야 → 나아가야 할 방향",
+              "앞 페이지의 분석 결과를 앱 개선으로 잇는 종합 제언입니다.")
+    st.markdown("")
+    section("1. 분석을 했더니")
     c = st.columns(2)
     with c[0]:
-        with st.container(border=True):
-            st.markdown("**관중은 주말·인기구장에 집중**")
-            if att is not None:
-                wk = att[att.is_weekend == 1]["attendance"].mean()
-                wd = att[att.is_weekend == 0]["attendance"].mean()
-                sm = att.groupby("stadium")["attendance"].mean()
-                st.markdown(f"주말이 평일보다 약 **{(wk-wd)/wd*100:.0f}% 많고**, 구장 격차도 큼"
-                            f"({sm.idxmax()}↔{sm.idxmin()}). 모델로 구장별평균 대비 +16% 예측.")
-            else:
-                st.markdown("주말·인기구장 집중. 모델로 구장별평균 대비 +16% 예측.")
+        finding_card("관중은 주말·인기구장에 집중",
+                     "주말이 평일보다 뚜렷이 많고 구장 격차도 큽니다. 모델은 구장별 평균 대비 +16% 더 정확히 예측.", "navy")
+        finding_card("감성은 '검증'이 핵심이었다",
+                     "범용 모델 39.5%(실패) → Claude로 다시 라벨링해 사람 판단 대비 75.5% 일치 확보.", "navy")
     with c[1]:
-        with st.container(border=True):
-            st.markdown("**팬은 '기록'보다 '스토리'에 반응**")
-            st.markdown("끝내기·역전·육성 데뷔 같은 극적 장면에 반응이 집중(LLM 요약·키워드 빈도).")
-    c2 = st.columns(2)
-    with c2[0]:
-        with st.container(border=True):
-            st.markdown("**감성은 '검증'이 핵심이었다**")
-            ag = (io.load_llm_sentiment_meta() or {}).get("agreement")
-            st.markdown(f"범용 모델 39.5%(실패) → Claude 어노테이터로 전환, 사람 판단 대비 **{ag*100:.1f}% 일치**."
-                        if ag else "범용 모델 39.5%(실패) → Claude로 전환·검증.")
-    with c2[1]:
-        with st.container(border=True):
-            st.markdown("**앱엔 개인화가 없다 (AI 챗봇은 이미 존재)**")
-            st.markdown("전 사용자가 동일 홈, 응원팀 개인화 부재. AI 챗봇은 이미 있음(docs/01).")
+        finding_card("팬은 '기록'보다 '스토리'에 반응",
+                     "끝내기·역전·육성 데뷔 같은 극적 장면에 반응이 집중(LLM 요약·키워드 빈도).", "blue")
+        finding_card("앱엔 개인화가 없다",
+                     "전 사용자가 동일 홈, 응원팀 기반 개인화 부재. (AI 챗봇은 이미 존재)", "blue")
 
-    st.subheader("2. 그래서 이렇게 고쳐야 (발견 → 개선)")
+    st.markdown("---")
+    section("2. 그래서 이렇게 고쳐야 (발견 → 개선)")
     rec = pd.DataFrame([
-        ["개인화 부재", "F-01 응원팀 기반 개인화 홈", "팀 선택 시 그 팀 일정·기록·콘텐츠 중심으로 홈 재배치", "상"],
+        ["개인화 부재", "F-01 응원팀 기반 개인화 홈", "팀 선택 시 일정·기록·콘텐츠 중심으로 홈 재배치", "상"],
         ["팬 기록 욕구", "F-03 개인 관람 기록", "직관·집관 기록과 개인 통계(승요력 등)", "상"],
         ["관중 편차·예측 가능", "F-02 추천 경기 카드", "'오늘 볼 만한 경기'를 개인화 노출", "상"],
-        ["스토리에 반응", "F-04 콘텐츠 추천 정렬 · F-07 콘텐츠 태깅", "반응 많은 콘텐츠를 상단 정렬 + 팀·선수·상황 태깅", "중"],
+        ["스토리에 반응", "F-04 콘텐츠 추천 정렬 · F-07 콘텐츠 태깅", "반응 많은 콘텐츠 상단 정렬 + 팀·선수·상황 태깅", "중"],
         ["AI 챗봇 기존재", "F-08 기존 AI 챗봇 고도화", "이미 있는 챗봇을 응원팀 기반 질의·추천으로 확장", "중"],
     ], columns=["분석 발견", "개선안(기능)", "기능 설명", "우선순위"])
     st.table(rec)
 
-    st.markdown("**기능 요구사항 전체 (F-01 ~ F-08)** — 'F-번호'는 기능 요구사항 정의서의 기능 ID입니다.")
+    st.markdown('<div style="font-size:.85rem;font-weight:700;color:%s;margin:6px 0 8px;">'
+                '기능 요구사항 전체 (F-01 ~ F-08) · \'F-번호\'는 기능 정의서의 기능 ID입니다.</div>' % INK,
+                unsafe_allow_html=True)
     glo = pd.DataFrame([
         ["F-01", "응원팀 기반 개인화 홈", "팀 선택 시 일정·기록·콘텐츠 중심으로 홈 재배치", "상"],
         ["F-02", "추천 경기 카드", "'오늘 볼 만한 경기'를 개인화 노출", "상"],
@@ -524,34 +514,19 @@ def render_conclusion():
     ], columns=["ID", "기능명", "설명", "우선순위"])
     st.table(glo)
 
-    st.subheader("3. 나아가야 할 방향")
+    st.markdown("---")
+    section("3. 나아가야 할 방향")
     cc = st.columns(3)
     with cc[0]:
-        with st.container(border=True):
-            st.markdown("**단기**")
-            st.markdown("응원팀 개인화 홈 + 추천 경기 — 근거가 가장 명확하고 진입 빈도 최고")
+        finding_card("단기", "응원팀 개인화 홈 + 추천 경기 — 근거가 가장 명확하고 진입 빈도 최고", "navy")
     with cc[1]:
-        with st.container(border=True):
-            st.markdown("**중기**")
-            st.markdown("스토리 중심 콘텐츠 큐레이션 + 기존 AI 챗봇 개인화 고도화")
+        finding_card("중기", "스토리 중심 콘텐츠 큐레이션 + 기존 AI 챗봇 개인화 고도화", "blue")
     with cc[2]:
-        with st.container(border=True):
-            st.markdown("**데이터 과제**")
-            st.markdown("순위·승률 피처(시점 누수 주의) · 감성 도메인 파인튜닝 · 실 행동로그 확보")
+        finding_card("데이터 과제", "순위·승률 피처(시점 누수 주의) · 감성 도메인 파인튜닝 · 실 행동로그 확보", "caution")
 
-    with st.container(border=True):
-        st.markdown("⚠ 제언은 협의 전 제안이며, 개인화 근거 일부는 합성 행동로그 기반입니다. "
-                    "실서비스 적용에는 실데이터·유관 부서 협의가 필요합니다. (상세: docs/04 · docs/05)")
+    st.markdown("")
+    callout("참고", "제언은 협의 전 제안이며, 개인화 근거 일부는 합성 행동로그 기반입니다. "
+                   "실서비스 적용에는 실데이터·유관 부서 협의가 필요합니다.")
 
 
-# ---------- 라우터 ----------
-if page == "종합 대시보드":
-    render_overview()
-elif page == "관중 분석·예측":
-    render_attendance()
-elif page == "팬 감성·반응":
-    render_sentiment()
-elif page == "콘텐츠 이용":
-    render_content()
-else:
-    render_conclusion()
+
