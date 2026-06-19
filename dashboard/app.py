@@ -28,37 +28,49 @@ SENT_COLORS = {
     "긍정": NAVY, "부정": RED, "중립": "#c2c8d4",
 }
 
-def _md(s):
-    """HTML/CSS 주입. st.html은 마크다운 처리를 거치지 않아 <style>이 안전하게 적용된다."""
+def inject(s):
+    """CSS/HTML 주입. st.html은 마크다운 파서를 거치지 않아 raw text로 새지 않음.
+    (구버전 Streamlit 대비 markdown 폴백)"""
+    s = "\n".join(line.strip() for line in s.splitlines())
     if hasattr(st, "html"):
         st.html(s)
-    else:  # 구버전 폴백: 빈 줄 제거(빈 줄이 <style> 블록을 끊음)
-        lines = [line.strip() for line in s.splitlines() if line.strip()]
-        st.markdown("\n".join(lines), unsafe_allow_html=True)
+    else:
+        st.markdown(s, unsafe_allow_html=True)
 
 
-_md(
+inject(
     """
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
     <style>
-      html, body, [class*="css"], .stMarkdown, .stApp { font-family:'Pretendard',-apple-system,sans-serif; }
-      .stApp { background:#eef0f4; }
+      @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+      html, body, [class*="css"], .stMarkdown, .stApp,
+      [data-testid="stAppViewContainer"] { font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo',sans-serif; }
+      .stApp, [data-testid="stAppViewContainer"] { background:#eef0f4; }
       header[data-testid="stHeader"] { background:transparent; }
       #MainMenu, footer { visibility:hidden; }
       .block-container { padding-top:1.2rem; padding-bottom:3rem; max-width:1200px; }
 
       /* ---- 상단 네비 (가로 라디오) ---- */
-      div[role="radiogroup"] { gap:4px !important; }
+      div[data-testid="stRadio"] > div[role="radiogroup"] {
+        display:flex !important; flex-wrap:wrap; align-items:center;
+        gap:2px !important; border-bottom:2px solid #0a1c45; padding-bottom:0;
+      }
       div[role="radiogroup"] > label {
-        background:transparent; border:0; border-bottom:3px solid transparent;
-        border-radius:0; padding:10px 18px 8px; margin:0 !important;
-        color:#7a8398; font-weight:700; font-size:15px;
+        background:transparent !important; border:0; border-bottom:3px solid transparent;
+        border-radius:0; padding:10px 18px 9px; margin:0 !important;
+        color:#7a8398; font-weight:700; display:flex; align-items:center;
+      }
+      div[role="radiogroup"] > label div[data-testid="stMarkdownContainer"] p {
+        font-size:15px; font-weight:700; margin:0;
       }
       div[role="radiogroup"] > label:hover { color:#0a1c45; }
-      div[role="radiogroup"] > label[data-baseweb] svg,
-      div[role="radiogroup"] input { display:none; }
+      /* 라디오 동그라미/네이티브 input 숨김 */
+      div[role="radiogroup"] > label > div:first-child { display:none !important; }
+      div[role="radiogroup"] input { position:absolute !important; opacity:0 !important; width:0 !important; height:0 !important; }
       div[role="radiogroup"] > label:has(input:checked) {
-        color:#0a1c45; border-bottom:3px solid #c8102e;
+        border-bottom:3px solid #c8102e;
+      }
+      div[role="radiogroup"] > label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+        color:#0a1c45;
       }
 
       /* ---- 카드 (container border) ---- */
@@ -72,18 +84,16 @@ _md(
       h1 { color:#101a36; font-weight:800; letter-spacing:-0.01em; }
       h2, h3 { color:#101a36; font-weight:800; }
 
-      /* ---- KBO 히어로 배너 ---- */
+      /* ---- KBO 배너 ---- */
       .kbo-topbar {
-        background:#06122e; margin:-1.2rem -100vw 0; padding:9px 100vw;
+        background:#06122e; border-radius:4px; padding:9px 16px; margin-bottom:14px;
         display:flex; align-items:center; gap:12px;
       }
       .kbo-topbar b { color:#fff; letter-spacing:0.04em; font-size:14px; }
-      .kbo-topbar span { color:#7c89ab; font-size:11px; letter-spacing:0.14em; }
-      .kbo-nav-wrap { background:#fff; border-bottom:2px solid #0a1c45; margin:0 -100vw 22px; padding:0 100vw; }
+      .kbo-topbar span { color:#7c89ab; font-size:11px; letter-spacing:0.12em; }
 
       .kbo-hero {
-        background:#0a1c45; border-radius:6px; padding:30px 34px; margin-bottom:22px;
-        position:relative; overflow:hidden;
+        background:#0a1c45; border-radius:6px; padding:30px 34px; margin:18px 0 22px;
       }
       .kbo-hero .eyebrow { color:#e0364f; font-weight:700; font-size:13px; letter-spacing:0.1em; }
       .kbo-hero h1 { color:#fff; font-size:34px; margin:8px 0 0; }
@@ -95,7 +105,7 @@ _md(
       .kbo-hero .stat .v.red { color:#e0364f; }
       .kbo-hero .stat .l { color:#9fabcc; font-size:12px; margin-top:2px; }
 
-      .kbo-pagehead { background:#0a1c45; border-radius:6px; padding:24px 30px; margin-bottom:22px; }
+      .kbo-pagehead { background:#0a1c45; border-radius:6px; padding:24px 30px; margin:18px 0 22px; }
       .kbo-pagehead .eyebrow { color:#e0364f; font-weight:700; font-size:12.5px; letter-spacing:0.08em; }
       .kbo-pagehead h1 { color:#fff; font-size:27px; margin:8px 0 0; }
       .kbo-pagehead p { color:#aeb8d4; font-size:14px; margin:9px 0 0; line-height:1.5; }
@@ -161,17 +171,15 @@ def kpi(col, label, value, badge=None, desc=None):
 
 
 # ---------- 상단 네비 ----------
-st.markdown(
-    '<div class="kbo-topbar"><b>KBO</b><span>FAN INSIGHT · 공개 데이터 분석 · 서비스 기획</span></div>',
-    unsafe_allow_html=True,
+inject(
+    '<div class="kbo-topbar"><b>KBO</b>'
+    '<span>FAN INSIGHT · 공개 데이터 분석 · 서비스 기획</span></div>'
 )
-st.markdown('<div class="kbo-nav-wrap">', unsafe_allow_html=True)
 page = st.radio(
     "메뉴",
     ["종합 대시보드", "관중 분석·예측", "팬 감성·반응", "콘텐츠 이용", "분석 → 제언"],
     horizontal=True, label_visibility="collapsed",
 )
-st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------- 1. 종합 대시보드 ----------
@@ -179,7 +187,7 @@ def render_overview():
     n_games = f"{len(att):,}" if att is not None else "—"
     n_com = f"{len(com):,}" if com is not None else "—"
     mae_v = f"{_mae[0]:,.0f}" if _mae else "—"
-    _md(
+    inject(
         f"""
         <div class="kbo-hero">
           <div class="eyebrow">2026 KBO · 공개 데이터 분석 리포트</div>
@@ -235,7 +243,7 @@ def render_overview():
 
 # ---------- 2. 관중 분석·예측 ----------
 def render_attendance():
-    _md(
+    inject(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">ATTENDANCE · 관중 분석 · 예측</div>
@@ -311,7 +319,7 @@ def render_attendance():
 
 # ---------- 3. 팬 감성·반응 ----------
 def render_sentiment():
-    _md(
+    inject(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">SENTIMENT · 팬 감성 · 반응</div>
@@ -419,7 +427,7 @@ def render_sentiment():
 
 # ---------- 4. 콘텐츠 이용 ----------
 def render_content():
-    _md(
+    inject(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">CONTENT · 콘텐츠 이용</div>
@@ -454,7 +462,7 @@ def render_content():
 
 # ---------- 5. 분석 → 제언 ----------
 def render_conclusion():
-    _md(
+    inject(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">CONCLUSION · 분석 → 제언</div>
