@@ -33,12 +33,17 @@ CAT = [NAVY, NAVY2, "#6f86b8", "#9fb0cf", "#c4cdde"]
 CSS = """
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css');
-html, body, [class*="css"], .stApp { font-family:'Pretendard Variable',Pretendard,-apple-system,system-ui,sans-serif; word-break:keep-all; }
+html, body, .stApp { word-break:keep-all; }
+.stApp, .stApp *:not([class*="icon"]):not([class*="Icon"]):not([class*="material"]) { font-family:'Pretendard Variable','Pretendard',-apple-system,system-ui,sans-serif; }
 .stApp { background:#eef0f4; }
 header[data-testid="stHeader"], #MainMenu, footer { display:none; }
 section[data-testid="stSidebar"] { display:none; }
-.block-container { padding:0 0 3rem !important; max-width:100% !important; }
-.kbo-inner { max-width:1180px; margin:0 auto; padding:0 32px; }
+/* 본문 컬럼을 1180으로 중앙 정렬 → 네이티브 위젯·HTML 카드 폭 통일 */
+.block-container { padding:0 24px 3rem !important; max-width:1228px !important; margin:0 auto !important; }
+.kbo-inner { width:100%; }
+/* 네이비 띠는 풀블리드로 빼고, 내부 콘텐츠는 다시 1180으로 정렬 */
+.kbo-util, .kbo-nav, .kbo-hero, .kbo-ph { margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw); }
+.kbo-util > .kbo-inner, .kbo-nav > .kbo-inner, .kbo-hero > .kbo-inner, .kbo-ph > .kbo-inner { max-width:1228px; margin:0 auto; padding:0 24px; box-sizing:border-box; }
 
 /* ===== 상단 유틸바 ===== */
 .kbo-util { background:#06122e; height:36px; display:flex; align-items:center; }
@@ -238,15 +243,9 @@ def page_overview():
         '<div class="bd">범용 감성모델은 39.5%로 실패. Claude로 다시 라벨링해 사람 판단과 75.5% 일치를 확보했습니다.</div></div>'
         '</div></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="kbo-inner" style="margin-top:22px"></div>', unsafe_allow_html=True)
-    with st.container():
-        cwrap = st.columns([1, 1, 0.001])
-    # 차트 영역: 중앙 정렬 위해 inner 폭 맞춘 컬럼
-    box = st.container()
-    with box:
-        st.markdown('<div class="kbo-inner">', unsafe_allow_html=True)
-        cL, cR = st.columns(2)
-        with cL:
+    st.markdown('<div style="margin-top:22px"></div>', unsafe_allow_html=True)
+    cL, cR = st.columns(2)
+    with cL:
             with st.container(border=True):
                 st.markdown('<h3 style="font-size:15px;font-weight:800;color:#101a36;margin:0 0 2px">요일별 평균 관중</h3>'
                             '<div style="font-size:12px;color:#8089a0;margin-bottom:8px">주말이 평일보다 뚜렷이 높음 (상대 비교)</div>',
@@ -259,19 +258,21 @@ def page_overview():
                     vals = [9300, 9000, 9600, 9150, 12000, 15000, 14400]
                 bars = [NAVY if x in ("토", "일") else (NAVY2 if x == "금" else "#c3ccdd") for x in order]
                 fig = go.Figure(go.Bar(x=order, y=vals, marker_color=bars))
-                st.plotly_chart(style_fig(fig, 250), use_container_width=True)
-        with cR:
+                st.plotly_chart(style_fig(fig, 260), use_container_width=True)
+    with cR:
             with st.container(border=True):
                 st.markdown(
                     '<h3 style="font-size:15px;font-weight:800;color:#101a36;margin:0 0 2px">'
                     'LLM 감성 분포 <span class="badge-trust">신뢰</span></h3>'
-                    '<div style="font-size:12px;color:#8089a0;margin-bottom:16px">Claude 라벨링 · 사람이 직접 확인한 200건과 75.5% 일치</div>'
-                    '<div class="sentbar"><div style="width:55%;background:#0a1c45">긍정 55%</div>'
-                    '<div style="width:24%;background:#c8102e">부정 24%</div>'
-                    '<div style="width:21%;background:#c2c8d4;color:#4a5267">중립 21%</div></div>'
-                    '<div style="font-size:12.5px;color:#5a6378;line-height:1.6">범용 모델(39.5%)이 야구 은어(사이다·개추)를 '
-                    '부정으로 오분류 → LLM 전환 후 신뢰 분포 확보.</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+                    '<div style="font-size:12px;color:#8089a0;margin-bottom:4px">Claude 라벨링 · 사람이 직접 확인한 200건과 75.5% 일치</div>',
+                    unsafe_allow_html=True)
+                fig = go.Figure(go.Pie(labels=["긍정", "부정", "중립"], values=[55, 24, 21], hole=.58,
+                                       marker_colors=[NAVY, RED2, "#c2c8d4"], sort=False))
+                fig.update_traces(textinfo="label+percent", textfont_size=13,
+                                  marker=dict(line=dict(color="#fff", width=2)))
+                fig.update_layout(annotations=[dict(text="긍정<br>55%", x=.5, y=.5, font_size=17,
+                                  showarrow=False, font_color=NAVY)])
+                st.plotly_chart(style_fig(fig, 260), use_container_width=True)
 
     st.markdown(
         '<div class="kbo-inner" style="margin-top:30px"><div class="callout">'
