@@ -222,6 +222,22 @@ def render_sentiment():
                                 use_container_width=True)
         st.caption("⚠ 팀별은 매치업 단위(상대팀 포함) — 경기 반응으로 해석.")
 
+    err = io.load_error_analysis()
+    if err is not None and not err.empty and {"label", "claude"}.issubset(err.columns):
+        with st.expander("🔍 오분류 분석 — Claude가 인간과 어디서 갈렸나 (일치율 75.5%의 '나머지')"):
+            n = len(err)
+            to_neu = int((err["claude"] == "neutral").sum())
+            flips = int((((err["label"] == "positive") & (err["claude"] == "negative")) |
+                        ((err["label"] == "negative") & (err["claude"] == "positive"))).sum())
+            st.markdown(f"- 불일치 **{n}건** 중 **{to_neu}건({to_neu/n*100:.0f}%)**이 Claude가 '중립'으로 "
+                        "물러난 경우 — 비꼼·인사이더 은어·암시적 감정")
+            st.markdown(f"- 긍↔부 **극성 반전은 {flips}건뿐** → 모델이 방향을 틀리는 게 아니라 세기·모호함에서 갈림")
+            dirs = (err.groupby(["label", "claude"]).size().reset_index(name="건수")
+                    .sort_values("건수", ascending=False))
+            st.dataframe(dirs, use_container_width=True, hide_index=True)
+            st.caption("일부 불일치는 사람끼리도 갈리는 라벨 주관성 영역. "
+                       "이 수치는 정답 대비가 아니라 인간 어노테이터 1명과의 '일치율' 기준이다.")
+
     st.subheader("그래서, 팬들은 무엇을 이야기하나요? (키워드 빈도)")
     st.caption("감성 모델과 달리 단어 빈도는 모델 추정이 아니라 직접 집계라 신뢰할 수 있습니다. "
                "댓글에 자주 등장한 단어로 '팬 관심사'를 봅니다.")

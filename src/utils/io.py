@@ -59,6 +59,11 @@ def load_llm_sentiment_meta():
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def load_error_analysis():
+    p = config.PROCESSED_DIR / "llm_error_analysis.csv"
+    return pd.read_csv(p) if p.exists() else None
+
+
 def load_model():
     p = config.MODELS_DIR / "attendance_xgb.pkl"
     if not p.exists():
