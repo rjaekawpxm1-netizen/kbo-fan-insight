@@ -155,6 +155,15 @@ div[data-testid="stVerticalBlockBorderWrapper"] h4 { font-size:13.5px !important
 div[data-testid="stVerticalBlockBorderWrapper"] li,
 div[data-testid="stVerticalBlockBorderWrapper"] p { font-size:13.5px; line-height:1.7; color:#3a4660; }
 div[data-testid="stVerticalBlockBorderWrapper"] blockquote { font-size:13px; color:#5a6378; border-left:3px solid #c4cdde; }
+/* 팀 칩 (st.radio → pill) */
+div[role="radiogroup"] { display:flex; flex-wrap:wrap; gap:8px; }
+div[role="radiogroup"] > label { background:#fff; border:1px solid #d3d9e6; border-radius:999px; padding:6px 16px; margin:0; min-height:0; }
+div[role="radiogroup"] > label > div:first-child { display:none; }
+div[role="radiogroup"] > label p { font-size:13px !important; font-weight:700; color:#3a4660; margin:0; }
+div[role="radiogroup"] > label:hover { border-color:#0a1c45; }
+div[role="radiogroup"] > label:has(input:checked) { background:#0a1c45; border-color:#0a1c45; }
+div[role="radiogroup"] > label:has(input:checked) p { color:#fff !important; }
+div[role="radiogroup"] input { position:absolute; opacity:0; width:0; height:0; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -441,42 +450,65 @@ def page_sentiment():
             st.plotly_chart(style_fig(fig, 260), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    sec("AI 팬 반응 요약", "Claude로 정성 요약 · 매치업(경기) 단위 반응")
+    # ── AI 팬 반응 요약 (초안 구조: 헤더+Claude 배지 / 팀 칩 / 구조화 카드 / 네이비 시사점) ──
+    st.markdown(
+        '<div class="kbo-sec" style="margin-bottom:6px"><span class="tick"></span>'
+        '<h2>AI 팬 반응 요약</h2>'
+        '<span style="font-size:11.5px;font-weight:700;color:#fff;background:#0a1c45;border-radius:3px;padding:3px 9px">Claude</span></div>'
+        '<div style="font-size:13px;color:#8089a0;margin:-2px 0 16px">한국어 맥락을 읽는 LLM으로 정성 요약. 주어진 댓글에만 근거하도록 그라운딩. '
+        '하이라이트는 두 팀이 함께 등장 → 매치업(경기) 단위 반응입니다.</div>', unsafe_allow_html=True)
+
     FAN_FB = {
-        "KIA": ("긍정 우세", ["김호령의 한 경기 3홈런", "박재현의 맹활약 — 게임 체인저", "정해영의 투구 부활"],
-                "3시간 지고있다가 10분 잘해서 이겼네…올해들어 기아가 이런 경기도 하네…감격"),
-        "LG": ("긍정 우세", ["오스틴의 활약 및 외인 역사", "김호령 한 경기 3홈런", "안정적인 마운드 운영"],
+        "KIA": ("긍정 우세", ["김호령의 한 경기 3홈런 — FA 영입 요구까지", "박재현의 맹활약 — 게임 체인저·AG 선발 거론", "정해영의 투구 부활 — 152km 직구로 뒷문 안정"],
+                "3시간 지고있다가 10분 잘해서 이겼네…올해들어 기아가 이런 경기도 하네….감격"),
+        "LG": ("긍정 우세", ["박준영(한화) 육성선수 최초 데뷔 선발승", "오스틴의 활약 및 LG 외국인 선수 역사", "김호령 한 경기 3홈런"],
                "LG 역대 최고의 외인 빠따: 더이상 이견이 있을 수 없음"),
-        "KT": ("긍정 우세", ["안치홍의 끝내기 만루홈런 — 연패 종식", "강백호에 대한 따뜻한 환대", "최원준의 활약"],
+        "KT": ("긍정 우세", ["안치홍의 끝내기 만루홈런 — 연패 종식", "KT 팬들의 강백호에 대한 따뜻한 환대", "최원준의 활약 및 구단에 대한 보답"],
                "안치홍 오늘 무조건 친다더니 끝내기 홈런을 쳐"),
-        "한화": ("긍정 우세", ["박준영 KBO 최초 육성선수 데뷔 선발승", "노시환 등 타선의 활약", "페라자 실책 아쉬움"],
+        "NC": ("긍정/흥미 우세", ["마무리 무사만루 연속 삼진(KKK) 세이브", "류지혁 그랜드슬램", "우천취소로 명장면이 묻힌 아쉬움"],
+               "볼2개 이어받은 상태에서 kkk… 진짜 레전드 세이브임 미쳤다"),
+        "SSG": ("긍정 우세", ["역전·끝내기 승리 및 연패 탈출", "마무리 손주영(해영)의 활약", "5/20 단독콘서트 흥행"],
+                "해영이가 살아나니까 뒷문이 든든하다 마무리가 두명이야"),
+        "두산": ("긍정 우세", ["박준순의 쓰리런 홈런 활약", "박찬호에 대한 애정과 재평가", "9회 만루홈런 극적 역전"],
+                "9회초 3점차를 뒤집는 만루홈런 ㅋㅋㅋ 극적인거 다 갖다붙였네"),
+        "롯데": ("긍정 우세", ["양창섭의 완봉승 — 퍼펙트 근접", "박재현의 다재다능한 활약", "노시환·한동희 등의 기복"],
+                "포기하지 않고 노력하고 변화한 결과 오늘의 양창섭이 탄생했습니다"),
+        "삼성": ("긍정 우세", ["양창섭 퍼펙트 도전 — 구속 회복", "전병우 삼중살 후 만루홈런", "ABS 자동 볼판정 긍정 반응"],
+                "양창섭 90구에 150km 진짜 눈물난다 회복했구나"),
+        "키움": ("긍정 우세", ["단독콘서트(단콘) 흥행", "안치홍의 끝내기 만루홈런", "원성준의 이틀 연속 결정타"],
+                "이건 진짜 역대급 도파민 터지는 단콘이었다ㅋㅋㅋ"),
+        "한화": ("긍정 우세", ["박준영 KBO 최초 육성선수 데뷔 선발승", "노시환 등 타선의 활약", "페라자 실책·경기 혼란 아쉬움"],
                 "아무리봐도 이 팀은 노시환에 살고, 노시환에 죽는 팀이 맞음 ㅋㅋㅋ"),
     }
-    teams = sorted([k for k in D["fan"].keys() if not str(k).startswith("_")]) if D.get("fan") else list(FAN_FB.keys())
-    st.markdown('<div class="kbo-inner">', unsafe_allow_html=True)
-    t = st.selectbox("팀 선택", teams, label_visibility="collapsed")
-    if D.get("fan") and t in D["fan"]:
-        with st.container(border=True):
-            st.markdown(D["fan"][t])
-    else:
-        mood, topics, quote = FAN_FB.get(t, FAN_FB["KIA"])
-        cA, cB = st.columns([1.1, 1])
-        with cA:
-            st.markdown(f'<div style="font-size:22px;font-weight:800;color:#0a1c45;display:inline-block">{t}</div> '
-                        f'<span style="font-size:12px;font-weight:700;color:#c8102e;background:#fbeaed;border-radius:3px;padding:3px 10px">{mood}</span>',
-                        unsafe_allow_html=True)
-            st.markdown('<div style="font-size:13px;font-weight:800;color:#5a6378;margin:14px 0 8px">주요 화제 3가지</div>',
-                        unsafe_allow_html=True)
-            for tp in topics:
-                st.markdown(f'<div style="font-size:14px;color:#2a3450;line-height:1.6;margin-bottom:6px">• {tp}</div>',
-                            unsafe_allow_html=True)
-        with cB:
-            st.markdown(f'<div class="notebox"><b>대표 댓글</b><br>"{quote}"</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    teams = list(FAN_FB.keys())
+    t = st.radio("팀 선택", teams, horizontal=True, label_visibility="collapsed")
+    mood, topics, quote = FAN_FB[t]
 
-    st.markdown('<div class="kbo-inner" style="margin-top:18px"><div class="notebox">'
-                '<b>시사점.</b> 팬은 극적 장면·스토리에 반응합니다. 자주 언급되는 선수·상황을 앱 콘텐츠·푸시 주제 선정에 활용할 수 있습니다.'
-                '</div></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
+    cA, cB = st.columns([1.1, 1])
+    with cA:
+        bullets = "".join(
+            '<div style="display:flex;gap:11px;align-items:flex-start;margin-bottom:9px">'
+            '<span style="width:7px;height:7px;border-radius:50%;background:#2b5bd4;margin-top:7px;flex:none"></span>'
+            f'<span style="font-size:14px;color:#2a3450;line-height:1.55">{tp}</span></div>' for tp in topics)
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+            f'<span style="font-size:22px;font-weight:800;color:#0a1c45">{t}</span>'
+            f'<span style="font-size:12px;font-weight:700;color:#c8102e;background:#fbeaed;border-radius:3px;padding:3px 10px;white-space:nowrap">{mood}</span></div>'
+            '<div style="font-size:13px;font-weight:800;color:#5a6378;margin-bottom:10px">주요 화제 3가지</div>'
+            f'{bullets}', unsafe_allow_html=True)
+    with cB:
+        st.markdown(
+            '<div style="background:#f4f6fa;border-left:3px solid #0a1c45;padding:18px 20px">'
+            '<div style="font-size:12px;font-weight:800;color:#8089a0;letter-spacing:.04em;margin-bottom:10px">대표 댓글</div>'
+            f'<div style="font-size:14px;color:#2a3450;line-height:1.75;font-weight:500">"{quote}"</div></div>',
+            unsafe_allow_html=True)
+
+    st.markdown(
+        '<div style="margin-top:22px;background:#0a1c45;border-radius:4px;padding:16px 20px;'
+        'font-size:13.5px;color:#dbe2f1;line-height:1.65">💡 <b style="color:#e0364f">시사점:</b> '
+        '팬은 극적 장면·스토리에 반응. 자주 언급되는 선수·상황을 앱 콘텐츠·푸시 주제 선정에 활용.</div>',
+        unsafe_allow_html=True)
 
 
 # ════════════════════════ 4. 콘텐츠 이용 ════════════════════════
