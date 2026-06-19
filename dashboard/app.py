@@ -147,6 +147,14 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background:#fff; border:1px so
 .stPlotlyChart { background:transparent; }
 table { font-size:.84rem; }
 thead th { background:#0a1c45 !important; color:#cdd6ec !important; }
+/* 팬 리포트(마크다운) 제목 크기를 본문 톤에 맞춤 */
+div[data-testid="stVerticalBlockBorderWrapper"] h1,
+div[data-testid="stVerticalBlockBorderWrapper"] h2 { font-size:19px !important; font-weight:800; color:#0a1c45; margin:2px 0 10px; padding:0; }
+div[data-testid="stVerticalBlockBorderWrapper"] h3 { font-size:15px !important; font-weight:800; color:#101a36; margin:16px 0 8px; padding:0; }
+div[data-testid="stVerticalBlockBorderWrapper"] h4 { font-size:13.5px !important; font-weight:700; color:#101a36; margin:12px 0 6px; padding:0; }
+div[data-testid="stVerticalBlockBorderWrapper"] li,
+div[data-testid="stVerticalBlockBorderWrapper"] p { font-size:13.5px; line-height:1.7; color:#3a4660; }
+div[data-testid="stVerticalBlockBorderWrapper"] blockquote { font-size:13px; color:#5a6378; border-left:3px solid #c4cdde; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -220,8 +228,8 @@ def page_overview():
         '<div class="kbo-hero"><div class="g1"></div><div class="g2"></div><div class="kbo-inner">'
         '<div class="eyebrow">2026 KBO · 공개 데이터 분석 리포트</div>'
         '<h1>데이터로 읽는<br>KBO 팬의 마음</h1>'
-        '<p>KBO 공개 데이터(관중·유튜브 댓글)를 직접 수집·분석해 관중수를 예측하고 팬 반응을 검증한 '
-        '<b>데이터 분석 포트폴리오</b>입니다.</p>'
+        '<p>KBO 공개 데이터(관중·유튜브 댓글)를 직접 수집·분석해<br>'
+        '관중수를 예측하고 팬 반응을 검증한 <b>데이터 분석 포트폴리오</b>입니다.</p>'
         '<div class="stats">'
         f'<div class="stat"><div class="v">{N_GAMES}</div><div class="l">분석 경기수</div></div>'
         f'<div class="stat"><div class="v">{N_COM}</div><div class="l">수집 댓글</div></div>'
