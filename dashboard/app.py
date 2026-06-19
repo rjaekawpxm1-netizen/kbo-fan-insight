@@ -28,7 +28,12 @@ SENT_COLORS = {
     "긍정": NAVY, "부정": RED, "중립": "#c2c8d4",
 }
 
-st.markdown(
+def _md(s):
+    """들여쓰기를 제거해 마크다운이 코드블록으로 오인하지 않게 HTML/CSS를 주입."""
+    st.markdown("\n".join(line.strip() for line in s.splitlines()), unsafe_allow_html=True)
+
+
+_md(
     """
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
     <style>
@@ -91,8 +96,7 @@ st.markdown(
       .kbo-pagehead h1 { color:#fff; font-size:27px; margin:8px 0 0; }
       .kbo-pagehead p { color:#aeb8d4; font-size:14px; margin:9px 0 0; line-height:1.5; }
     </style>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 
@@ -171,7 +175,7 @@ def render_overview():
     n_games = f"{len(att):,}" if att is not None else "—"
     n_com = f"{len(com):,}" if com is not None else "—"
     mae_v = f"{_mae[0]:,.0f}" if _mae else "—"
-    st.markdown(
+    _md(
         f"""
         <div class="kbo-hero">
           <div class="eyebrow">2026 KBO · 공개 데이터 분석 리포트</div>
@@ -184,8 +188,7 @@ def render_overview():
             <div class="stat"><div class="v">75.5%</div><div class="l">LLM·사람 판단 일치율</div></div>
           </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     st.subheader("핵심 지표")
@@ -228,15 +231,14 @@ def render_overview():
 
 # ---------- 2. 관중 분석·예측 ----------
 def render_attendance():
-    st.markdown(
+    _md(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">ATTENDANCE · 관중 분석 · 예측</div>
           <h1>관중은 언제·어디서 몰리나, 예측 가능한가</h1>
           <p>요일·구장·상대팀 정보로 경기별 관중수를 예측하고, 단순 baseline을 이기는지로 가치를 검증했습니다.</p>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
     if att is None:
         st.info("`python -m src.preprocess.build_dataset` 먼저 실행하세요.")
@@ -305,15 +307,14 @@ def render_attendance():
 
 # ---------- 3. 팬 감성·반응 ----------
 def render_sentiment():
-    st.markdown(
+    _md(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">SENTIMENT · 팬 감성 · 반응</div>
           <h1>팬은 무엇에 반응하고, 무엇을 말하나</h1>
           <p>하이라이트 댓글을 분석했습니다. 검증에 실패한 범용 모델을 인정하고, 더 적합한 LLM으로 전환했습니다.</p>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
     if sent is None:
         st.info("`python -m src.analysis.sentiment` 먼저 실행하세요.")
@@ -414,15 +415,14 @@ def render_sentiment():
 
 # ---------- 4. 콘텐츠 이용 ----------
 def render_content():
-    st.markdown(
+    _md(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">CONTENT · 콘텐츠 이용</div>
           <h1>어떤 하이라이트가 팬 반응을 끄나</h1>
           <p>영상별 댓글·좋아요로 '반응이 큰 콘텐츠 유형'을 찾아 앱 홈 추천 정렬에 활용합니다.</p>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
     data = com if com is not None else sent  # 배포 시 원시 댓글 대신 감성 결과(제목·좋아요 포함) 사용
     if data is None:
@@ -450,15 +450,14 @@ def render_content():
 
 # ---------- 5. 분석 → 제언 ----------
 def render_conclusion():
-    st.markdown(
+    _md(
         """
         <div class="kbo-pagehead">
           <div class="eyebrow">CONCLUSION · 분석 → 제언</div>
           <h1>분석을 했더니 → 이렇게 고쳐야 → 나아가야 할 방향</h1>
           <p>앞 페이지의 분석 결과를 앱 개선으로 잇는 종합 제언입니다.</p>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     st.subheader("1. 분석을 했더니")
